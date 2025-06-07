@@ -42,3 +42,17 @@ down:
 
 activate:
 	. .venv/bin/activate
+
+start-mysql:
+	sudo service mysql start
+
+clean-model:
+	python3 -c "with open('datxe_backend/models.py', 'r', encoding='utf-8', errors='ignore') as f: data = f.read(); open('datxe_backend/models.py', 'w', encoding='utf-8').write(data)"
+
+fix-model:
+	rm -f datxe_backend/models.py
+	rm -f datxe_backend/migrations/*.py
+	rm -f datxe_backend/migrations/__pycache__/*.py
+	python manage.py inspectdb > datxe_backend/models.py
+	black datxe_backend/models.py
+	clean-model

@@ -82,12 +82,14 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'hethongdatxe',
-        'USER': 'root',
+        'USER': 'django',
         'PASSWORD': '1234',
-        'HOST': 'localhost',
+        'HOST': '127.0.0.1',
         'PORT': '3306',
     }
 }
+
+AUTH_USER_MODEL = 'datxe_backend.NguoiDung'
 
 
 # Password validation
