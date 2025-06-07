@@ -91,6 +91,13 @@ DATABASES = {
 
 AUTH_USER_MODEL = 'datxe_backend.NguoiDung'
 
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+SIMPLE_JWT = {
+    'USER_ID_FIELD': 'manguoidung',
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

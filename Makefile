@@ -33,6 +33,7 @@ lint:
 
 build:
 	docker-compose build
+	python scripts/hash_user_password.py
 
 up:
 	docker-compose up -d
@@ -56,3 +57,10 @@ fix-model:
 	python manage.py inspectdb > datxe_backend/models.py
 	black datxe_backend/models.py
 	clean-model
+
+hash-user-password: 
+	python manage.py shell
+	from models import NguoiDung
+	for user in NguoiDung.objects.all():
+		user.set_password(user.password)
+		user.save()

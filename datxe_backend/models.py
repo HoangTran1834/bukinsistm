@@ -13,18 +13,23 @@ class Vaitro(models.Model):
         return self.tenvaitro
 
 class NguoiDungManager(BaseUserManager):
-    def create_user(self, sodienthoai, matkhau=None, **extra_fields):
+    def create_user(self, sodienthoai, password=None, **extra_fields):
+        from django.utils import timezone
         if not sodienthoai:
             raise ValueError('Phải cung cấp số điện thoại')
+        if 'vaitro_id' not in extra_fields and 'vaitro' not in extra_fields:
+            extra_fields['vaitro_id'] = 3  # (Hành khách)
+        if 'date_joined' not in extra_fields and 'ngayTao' not in extra_fields:
+            extra_fields['date_joined'] = timezone.now()
         user = self.model(sodienthoai=sodienthoai, **extra_fields)
-        user.set_password(matkhau)
+        user.set_password(password)
         user.save()
         return user
 
-    def create_superuser(self, sodienthoai, matkhau=None, **extra_fields):
+    def create_superuser(self, sodienthoai, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        return self.create_user(sodienthoai, matkhau, **extra_fields)
+        return self.create_user(sodienthoai, password, **extra_fields)
 
 class NguoiDung(AbstractBaseUser):
     manguoidung = models.AutoField(db_column='maNguoiDung', primary_key=True)
