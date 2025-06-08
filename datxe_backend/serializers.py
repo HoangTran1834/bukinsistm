@@ -8,7 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = NguoiDung
         fields = '__all__'
                
-class DatxeSerializer(serializers.ModelSerializer):
+class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Datxe
         fields = '__all__'
