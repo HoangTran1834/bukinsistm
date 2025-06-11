@@ -8,7 +8,14 @@ class UserSerializer(serializers.ModelSerializer):
         model = NguoiDung
         fields = '__all__'
                
+class BookingDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Chitietdatxe
+        fields = '__all__'
+
 class BookingSerializer(serializers.ModelSerializer):
+    chitietdatxe = BookingDetailSerializer(many=True, read_only=True, source='chitietdatxe_set')
+
     class Meta:
         model = Datxe
         fields = '__all__'
@@ -46,3 +53,8 @@ class LoginSerializer(serializers.Serializer):
             'refresh': str(token),
         }
 
+class ShiftSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cataixe
+        fields = '__all__'
+        

@@ -115,7 +115,7 @@ CREATE TABLE `ChiTietDatXe` (
 
 CREATE TABLE `DiaDiem` (
 	`maDiaDiem` INTEGER NOT NULL,
-	`tenDiaDiem` INTEGER NOT NULL,
+	`tenDiaDiem` VARCHAR(255) NOT NULL,
 	`viDo` INTEGER NOT NULL,
 	`kinhDo` INTEGER NOT NULL,
 	PRIMARY KEY (`maDiaDiem`)
@@ -162,28 +162,42 @@ BEGIN
 END //
 
 DELIMITER //
+CREATE TRIGGER set_staff_superuser_truoc_khi_insert
+BEFORE INSERT ON NguoiDung
+FOR EACH ROW
+BEGIN
+    IF NEW.vaiTro = 1 THEN
+        SET NEW.is_staff = TRUE;
+        SET NEW.is_superuser = FALSE;
+    ELSEIF NEW.vaiTro = 2 THEN
+        SET NEW.is_staff = TRUE;
+        SET NEW.is_superuser = FALSE;
+    ELSEIF NEW.vaiTro = 0 THEN
+        SET NEW.is_staff = TRUE;
+        SET NEW.is_superuser = TRUE;
+    ELSE
+        SET NEW.is_staff = FALSE;
+        SET NEW.is_superuser = FALSE;
+    END IF;
+END //
 
+DELIMITER //
 CREATE TRIGGER them_nguoi_dung_sau_khi_insert
 AFTER INSERT ON NguoiDung
 FOR EACH ROW
 BEGIN
     IF NEW.vaiTro = 1 THEN
-        INSERT INTO TaiXe(maTaiXe)
-        VALUES (NEW.maNguoiDung);
-        UPDATE NguoiDung SET is_staff = TRUE WHERE maNguoiDung = NEW.maNguoiDung;
+        INSERT INTO TaiXe(maTaiXe, cccd, trangThai)
+        VALUES (NEW.maNguoiDung, '', 1);
     ELSEIF NEW.vaiTro = 2 THEN
-        INSERT INTO NhanVien(maNhanVien, ngayVaoLam)
-        VALUES (NEW.maNguoiDung, CURDATE());
-        UPDATE NguoiDung SET is_staff = TRUE WHERE maNguoiDung = NEW.maNguoiDung;
-    ELSEIF NEW.vaiTro = 0 THEN
-        UPDATE NguoiDung SET is_staff = TRUE, is_superuser = TRUE WHERE maNguoiDung = NEW.maNguoiDung;
-        END IF;
-    END //
+        INSERT INTO NhanVien(maNhanVien, ngayVaoLam, cccd, trangThai)
+        VALUES (NEW.maNguoiDung, CURDATE(), '', 1);
+    END IF;
+END //
 
 DELIMITER ;
 
 DELIMITER //
-
 CREATE TRIGGER cap_nhat_vai_tro_nguoi_dung
 AFTER UPDATE ON NguoiDung
 FOR EACH ROW
@@ -193,7 +207,7 @@ BEGIN
         IF EXISTS (SELECT 1 FROM TaiXe WHERE maTaiXe = NEW.maNguoiDung) THEN
             UPDATE TaiXe SET trangThai = 1 WHERE maTaiXe = NEW.maNguoiDung;
         ELSE
-            INSERT INTO TaiXe(maTaiXe, cccd) VALUES (NEW.maNguoiDung, '');
+            INSERT INTO TaiXe(maTaiXe, cccd, trangThai) VALUES (NEW.maNguoiDung, '', 1);
         END IF;
         UPDATE NhanVien SET trangThai = 0 WHERE maNhanVien = NEW.maNguoiDung;
     -- Nếu vai trò thay đổi thành Nhân viên (2)
@@ -201,7 +215,7 @@ BEGIN
         IF EXISTS (SELECT 1 FROM NhanVien WHERE maNhanVien = NEW.maNguoiDung) THEN
             UPDATE NhanVien SET trangThai = 1 WHERE maNhanVien = NEW.maNguoiDung;
         ELSE
-            INSERT INTO NhanVien(maNhanVien, ngayVaoLam, cccd) VALUES (NEW.maNguoiDung, CURDATE(), '');
+            INSERT INTO NhanVien(maNhanVien, ngayVaoLam, cccd, trangThai) VALUES (NEW.maNguoiDung, CURDATE(), '', 1);
         END IF;
         UPDATE TaiXe SET trangThai = 0 WHERE maTaiXe = NEW.maNguoiDung;
     -- Nếu vai trò thay đổi thành khác (không phải Tài xế hoặc Nhân viên)
@@ -301,7 +315,7 @@ INSERT INTO TuyenDuong (diemDon, diemTra, giaCuoc) VALUES
 ('Thăng Bình', 'Điện Bàn', 50000),
 ('Điện Bàn', 'Thăng Bình', 50000),
 ('Quế Sơn', 'Điện Bàn', 40000),
-('Điện Bàn', 'Quế Sơn', 40000)
+('Điện Bàn', 'Quế Sơn', 40000);
 
 
 -- Lập lịch xe chạy tuyến Tam Kỳ <-> Đà Nẵng từ 5h đến 15h (Tam Kỳ) và 7h đến 17h (Đà Nẵng)
@@ -466,3 +480,48 @@ INSERT INTO CaTaiXe (maTaiXe, maXe, gioXuatPhat, ngayXuatPhat, diaDiemXuatPhat) 
 (7, 4, '17:00:00', '2024-05-02', 'Đà Nẵng'),
 (8, 5, '17:00:00', '2024-05-02', 'Đà Nẵng'),
 (9, 6, '17:00:00', '2024-05-02', 'Đà Nẵng');
+
+-- Thêm dữ liệu địa điểm mẫu để đảm bảo các foreign key cho DatXe và ChiTietDatXe
+INSERT INTO DiaDiem (maDiaDiem, tenDiaDiem, viDo, kinhDo) VALUES
+(1, '123 Lê Lợi, Tam Kỳ', 0, 0),
+(2, '45 Nguyễn Văn Linh, Đà Nẵng', 0, 0),
+(3, '12 Trần Phú, Thăng Bình', 0, 0),
+(4, '88 Hùng Vương, Quế Sơn', 0, 0),
+(5, '99 Lý Thường Kiệt, Điện Bàn', 0, 0);
+
+-- Thêm dữ liệu đặt xe
+INSERT INTO DatXe (maNguoiDung, thoiGianDat, maNhanVien, maCa, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu, yeuCauChungXe) VALUES
+(12, '2024-05-01 10:00:00', 10, 1, 2, 1, 1, 'Đã xác nhận', 'Khách cần ghế trẻ em', 0),
+(13, '2024-05-01 11:00:00', 11, 2, 1, 2, 2, 'Đã xác nhận', '', 1),
+(14, '2024-05-01 12:00:00', 10, 3, 2, 1, 1, 'Chờ xác nhận', '', 0),
+(15, '2024-05-01 13:00:00', 11, 4, 1, 2, 2, 'Đã hủy', 'Khách hủy do thay đổi lịch', 0),
+(16, '2024-05-01 14:00:00', 10, 5, 2, 1, 1, 'Đã xác nhận', '', 1),
+(17, '2024-05-01 15:00:00', 10, 6, 2, 1, 1, 'Đã xác nhận', '', 0);
+
+-- Thêm dữ liệu chi tiết đặt xe
+-- Đặt xe 1: 1 chi tiết
+INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+(1, 1, 'Nguyễn Văn An', '0912345678', 2, 1, 1, 'Đã xác nhận', '');
+
+-- Đặt xe 2: 2 chi tiết
+INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+(2, 2, 'Phạm Minh Đức', '0933123456', 1, 2, 2, 'Đã xác nhận', 'Yêu cầu xe rộng'),
+(2, 2, 'Nguyễn Thị Lan', '0977000005', 1, 2, 2, 'Đã xác nhận', '');
+
+-- Đặt xe 3: 1 chi tiết
+INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+(3, 3, 'Hoàng Thị Em', '0944987654', 2, 1, 1, 'Chờ xác nhận', '');
+
+-- Đặt xe 4: 2 chi tiết
+INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+(4, 4, 'Đặng Văn Phúc', '0967894321', 1, 2, 2, 'Đã hủy', 'Khách hủy'),
+(4, 4, 'Lê Thị Thu', '0911000003', 1, 2, 2, 'Đã hủy', '');
+
+-- Đặt xe 5: 1 chi tiết
+INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+(5, 5, 'Vũ Minh Tuấn', '0933555777', 2, 1, 1, 'Đã xác nhận', '');
+
+-- Đặt xe 6: 2 chi tiết
+INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+(6, 6, 'Lý Thị Hoa', '0922444666', 2, 1, 1, 'Đã xác nhận', ''),
+(6, 6, 'Trịnh Văn Sơn', '0911222333', 2, 1, 1, 'Đã xác nhận', '');

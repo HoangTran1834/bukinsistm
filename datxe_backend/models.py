@@ -100,6 +100,9 @@ class Diadiem(models.Model):
     class Meta:
         managed = False
         db_table = 'DiaDiem'
+        
+    def __str__(self):
+        return self.tendiadiem
 
 class Tuyenduong(models.Model):
     matuyenduong = models.AutoField(db_column='maTuyenDuong', primary_key=True)

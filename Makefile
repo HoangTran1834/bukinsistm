@@ -25,9 +25,6 @@ makemigrations:
 createsuperuser:
 	python manage.py createsuperuser
 
-test:
-	pytest
-
 lint:
 	black . && isort .
 
@@ -64,3 +61,11 @@ hash-user-password:
 	for user in NguoiDung.objects.all():
 		user.set_password(user.password)
 		user.save()
+
+update-database:
+	mysql -u root -pAbc123!@# hethongdatxe < HeThongDatXe.sql 
+	python manage.py migrate 
+	python scripts/hash_user_password.py
+
+test:
+	pytest tests/
