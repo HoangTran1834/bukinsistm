@@ -1,4 +1,4 @@
-.PHONY: help run migrate makemigrations createsuperuser test lint build up down
+.PHONY: help migrate makemigrations createsuperuser test lint build up down run-ui run-ser
 
 # Lệnh mặc định khi chạy `make`
 help:
@@ -13,7 +13,10 @@ help:
 	@echo "  make up                # Khởi động docker-compose"
 	@echo "  make down              # Tắt docker-compose"
 
-run:
+run-ui:
+	cd datxe_frontend && npm install && npm run dev
+
+run-ser:
 	python manage.py runserver
 
 migrate:
@@ -39,6 +42,9 @@ down:
 	docker-compose down
 
 activate:
+	. .venv/Scripts/activate
+
+activate-wsl:
 	. .venv/bin/activate
 
 start-mysql:

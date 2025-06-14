@@ -45,6 +45,11 @@ class UserViewSet(viewsets.ModelViewSet):
         # Chỉ cho phép user xem/sửa thông tin của chính mình
         return NguoiDung.objects.filter(pk=self.request.user.pk)
 
+    @action(detail=False, methods=['get'], url_path='profile')
+    def profile(self, request):
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+
     def retrieve(self, request, *args, **kwargs):
         # Luôn trả về user hiện tại
         instance = self.request.user
@@ -98,7 +103,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         if getattr(user, 'vaitro', None) in [0, 2]:
             return super().get_queryset()
         # Hành khách chỉ xem booking của mình
-        return Datxe.objects.filter(maNguoiDung=user.pk)
+        return Datxe.objects.filter(manguoidung_id=user.pk)
 
     def get_serializer_class(self):
         # Luôn trả về BookingSerializer (đã có chitietdatxe trong fields)

@@ -85,8 +85,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'hethongdatxe',
-        'USER': 'django',
-        'PASSWORD': '1234',
+        'USER': 'root',
+        'PASSWORD': 'Abc123!@#',
         'HOST': '127.0.0.1',
         'PORT': '3306',
     }
@@ -105,6 +105,9 @@ SIMPLE_JWT = {
 }
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
