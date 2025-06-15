@@ -1,47 +1,110 @@
-import React, { useState } from 'react';
-import SignupForm from './components/SignupForm';
-import LoginForm from './components/LoginForm';
-import Profile from './components/Profile';
-import BookingList from './components/BookingList';
-import './App.css';
+import React from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import "./App.css";
+import Layout from "./components/Layout";
+import { useAuth } from "./contexts/AuthContext";
+import BookingCreate from "./pages/BookingCreate";
+import BookingDetail from "./pages/BookingDetail";
+import BookingList from "./pages/BookingList";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import NotFound from "./pages/NotFound";
+import Profile from "./pages/Profile";
+import ShiftList from "./pages/ShiftList";
+import Signup from "./pages/Signup";
 
 function App() {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-  const [showSignup, setShowSignup] = useState(false);
+  const { isAuthenticated, user } = useAuth();
 
-  const handleLogin = (tk: string) => {
-    setToken(tk);
-    localStorage.setItem('token', tk);
-  };
-  const handleLogout = () => {
-    setToken(null);
-    localStorage.removeItem('token');
+  const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    if (!isAuthenticated) {
+      return <Navigate to="/login" replace />;
+    }
+
+    return <>{children}</>;
   };
 
-  if (!token) {
-    return (
-      <div style={{maxWidth:400,margin:'40px auto'}}>
-        {showSignup ? (
-          <>
-            <SignupForm onSignup={() => setShowSignup(false)} />
-            <button onClick={() => setShowSignup(false)}>Đã có tài khoản? Đăng nhập</button>
-          </>
-        ) : (
-          <>
-            <LoginForm onLogin={handleLogin} />
-            <button onClick={() => setShowSignup(true)}>Chưa có tài khoản? Đăng ký</button>
-          </>
-        )}
-      </div>
-    );
-  }
+  const StaffRoute = ({ children }: { children: React.ReactNode }) => {
+    if (!isAuthenticated) {
+      return <Navigate to="/login" replace />;
+    }
+
+    // Check if user is admin (0) or staff (2)
+    if (user?.vaitro !== 0 && user?.vaitro !== 2) {
+      return <Navigate to="/" replace />;
+    }
+
+    return <>{children}</>;
+  };
+
+  const DriverRoute = ({ children }: { children: React.ReactNode }) => {
+    if (!isAuthenticated) {
+      return <Navigate to="/login" replace />;
+    }
+
+    // Check if user is driver (1)
+    if (user?.vaitro !== 1) {
+      return <Navigate to="/" replace />;
+    }
+
+    return <>{children}</>;
+  };
 
   return (
-    <div style={{maxWidth:600,margin:'40px auto'}}>
-      <button onClick={handleLogout} style={{float:'right'}}>Đăng xuất</button>
-      <Profile token={token} />
-      <BookingList token={token} />
-    </div>
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<Home />} />
+        <Route path="login" element={<Login />} />
+        <Route path="signup" element={<Signup />} />
+
+        <Route
+          path="profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="bookings">
+          <Route
+            index
+            element={
+              <ProtectedRoute>
+                <BookingList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="new"
+            element={
+              <ProtectedRoute>
+                <BookingCreate />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path=":id"
+            element={
+              <ProtectedRoute>
+                <BookingDetail />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+
+        <Route
+          path="shifts"
+          element={
+            <StaffRoute>
+              <ShiftList />
+            </StaffRoute>
+          }
+        />
+
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
   );
 }
 
