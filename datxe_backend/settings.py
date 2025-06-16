@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import sys
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -102,6 +103,8 @@ SIMPLE_JWT = {
     'USER_ID_FIELD': 'manguoidung',
     'BLACKLIST_AFTER_ROTATION': True,
     'ROTATE_REFRESH_TOKENS': True,
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),  # 2 tiếng
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # 7 ngày
 }
 
 REST_FRAMEWORK = {

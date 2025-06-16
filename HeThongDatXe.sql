@@ -3,7 +3,9 @@ DROP TABLE IF EXISTS `DiaDiem`;
 DROP TABLE IF EXISTS `ChiTietDatXe`;
 DROP TABLE IF EXISTS `DanhGia`;
 DROP TABLE IF EXISTS `DatXe`;
-DROP TABLE IF EXISTS `CaTaiXe`;
+DROP TABLE IF EXISTS `ChiTietCa`;
+DROP TABLE IF EXISTS `Ca`;
+DROP TABLE IF EXISTS `Huyen`;
 DROP TABLE IF EXISTS `TaiXe`;
 DROP TABLE IF EXISTS `NhanVien`;
 DROP TABLE IF EXISTS `Xe`;
@@ -73,14 +75,26 @@ CREATE TABLE `DanhGia` (
     PRIMARY KEY (`maDatXe`)
 );
 
-CREATE TABLE `CaTaiXe` (
+CREATE TABLE `Huyen` (
+    `maHuyen` INT NOT NULL AUTO_INCREMENT,
+    `tenHuyen` VARCHAR(50) NOT NULL,
+    PRIMARY KEY (`maHuyen`)
+);
+
+CREATE TABLE `Ca` (
     `maCa` INT NOT NULL AUTO_INCREMENT,
-    `maTaiXe` INT NOT NULL,
-    `maXe` INT NOT NULL,
     `gioXuatPhat` TIME NOT NULL,
     `ngayXuatPhat` DATE NOT NULL,
-    `diaDiemXuatPhat` VARCHAR(25) NOT NULL,
+    `maHuyenXuatPhat` INT NOT NULL,
     PRIMARY KEY (`maCa`)
+);
+
+CREATE TABLE `ChiTietCa` (
+    `maChiTietCa` INT NOT NULL AUTO_INCREMENT,
+    `maCa` INT NOT NULL,
+    `maXe` INT NOT NULL,
+    `maTaiXe` INT NOT NULL,
+    PRIMARY KEY (`maChiTietCa`)
 );
 
 CREATE TABLE `Xe` (
@@ -93,8 +107,8 @@ CREATE TABLE `Xe` (
 
 CREATE TABLE `TuyenDuong` (
     `maTuyenDuong` INT NOT NULL AUTO_INCREMENT,
-    `diemDon` VARCHAR(25) NOT NULL,
-    `diemTra` VARCHAR(25) NOT NULL,
+    `huyenDon` INT NOT NULL,
+    `huyenTra` INT NOT NULL,
     `giaCuoc` DECIMAL(10, 2) NOT NULL,
     PRIMARY KEY (`maTuyenDuong`)
 );
@@ -127,18 +141,22 @@ ALTER TABLE `NhanVien` ADD FOREIGN KEY (`maNhanVien`) REFERENCES `NguoiDung`(`ma
 ALTER TABLE `TaiXe` ADD FOREIGN KEY (`maTaiXe`) REFERENCES `NguoiDung`(`maNguoiDung`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`maNhanVien`) REFERENCES `NhanVien`(`maNhanVien`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`maNguoiDung`) REFERENCES `NguoiDung`(`maNguoiDung`);
-ALTER TABLE `DatXe` ADD FOREIGN KEY (`maCa`) REFERENCES `CaTaiXe`(`maCa`);
+ALTER TABLE `DatXe` ADD FOREIGN KEY (`maCa`) REFERENCES `Ca`(`maCa`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`maTuyenDuong`) REFERENCES `TuyenDuong`(`maTuyenDuong`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`diemDon`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`diemTra`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `DanhGia` ADD FOREIGN KEY (`maDatXe`) REFERENCES `DatXe`(`maDatXe`);
-ALTER TABLE `CaTaiXe` ADD FOREIGN KEY (`maTaiXe`) REFERENCES `TaiXe`(`maTaiXe`);
-ALTER TABLE `CaTaiXe` ADD FOREIGN KEY (`maXe`) REFERENCES `Xe`(`maXe`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maDatXe`) REFERENCES `DatXe`(`maDatXe`);
-ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maCa`) REFERENCES `CaTaiXe`(`maCa`);
+ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maCa`) REFERENCES `Ca`(`maCa`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maTuyenDuong`) REFERENCES `TuyenDuong`(`maTuyenDuong`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`diemTra`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`diemDon`) REFERENCES `DiaDiem`(`maDiaDiem`);
+ALTER TABLE `Ca` ADD FOREIGN KEY (`maHuyenXuatPhat`) REFERENCES `Huyen`(`maHuyen`);
+ALTER TABLE `ChiTietCa` ADD FOREIGN KEY (`maCa`) REFERENCES `Ca`(`maCa`);
+ALTER TABLE `ChiTietCa` ADD FOREIGN KEY (`maXe`) REFERENCES `Xe`(`maXe`);
+ALTER TABLE `ChiTietCa` ADD FOREIGN KEY (`maTaiXe`) REFERENCES `TaiXe`(`maTaiXe`);
+ALTER TABLE `TuyenDuong` ADD FOREIGN KEY (`huyenDon`) REFERENCES `Huyen`(`maHuyen`);
+ALTER TABLE `TuyenDuong` ADD FOREIGN KEY (`huyenTra`) REFERENCES `Huyen`(`maHuyen`);
 
 
 -- TRIGGERS
@@ -295,191 +313,97 @@ INSERT INTO Xe (bienSoXe, loaiXe, soChoNgoi) VALUES
 ('43E-55555', '7 chỗ', 7),
 ('43F-66666', '7 chỗ', 7);
 
-INSERT INTO TuyenDuong (diemDon, diemTra, giaCuoc) VALUES
-('Tam Kỳ', 'Đà Nẵng', 100000),
-('Đà Nẵng', 'Thăng Bình', 80000),
-('Tam Kỳ', 'Thăng Bình', 40000),
-('Thăng Bình', 'Tam Kỳ', 40000),
-('Thăng Bình', 'Đà Nẵng', 60000),
-('Đà Nẵng', 'Tam Kỳ', 100000),
-('Đà Nẵng', 'Quế Sơn', 70000),
-('Quế Sơn', 'Đà Nẵng', 70000),
-('Tam Kỳ', 'Quế Sơn', 60000),
-('Quế Sơn', 'Tam Kỳ', 60000),
-('Thăng Bình', 'Quế Sơn', 30000),
-('Quế Sơn', 'Thăng Bình', 30000),
-('Đà Nẵng', 'Điện Bàn', 20000),
-('Điện Bàn', 'Đà Nẵng', 20000),
-('Tam Kỳ', 'Điện Bàn', 90000),
-('Điện Bàn', 'Tam Kỳ', 90000),
-('Thăng Bình', 'Điện Bàn', 50000),
-('Điện Bàn', 'Thăng Bình', 50000),
-('Quế Sơn', 'Điện Bàn', 40000),
-('Điện Bàn', 'Quế Sơn', 40000);
+-- Thêm dữ liệu mẫu cho huyện trước khi insert tuyến đường
+INSERT INTO Huyen (tenHuyen) VALUES
+('Tam Kỳ'), -- 1
+('Đà Nẵng'), -- 2
+('Thăng Bình'), -- 3
+('Quế Sơn'), -- 4
+('Điện Bàn'); -- 5
 
+-- Insert tuyến đường sau khi đã có huyện
+INSERT INTO TuyenDuong (huyenDon, huyenTra, giaCuoc) VALUES
+(1, 2, 100000),
+(2, 3, 80000),
+(1, 3, 40000),
+(3, 1, 40000),
+(3, 2, 60000),
+(2, 1, 100000),
+(2, 4, 70000),
+(4, 2, 70000),
+(1, 4, 60000),
+(4, 1, 60000),
+(3, 4, 30000),
+(4, 3, 30000),
+(2, 5, 20000),
+(5, 2, 20000),
+(1, 5, 90000),
+(5, 1, 90000),
+(3, 5, 50000),
+(5, 3, 50000),
+(4, 5, 40000),
+(5, 4, 40000);
 
--- Lập lịch xe chạy tuyến Tam Kỳ <-> Đà Nẵng từ 5h đến 15h (Tam Kỳ) và 7h đến 17h (Đà Nẵng)
--- Phân bổ tài xế và xe hợp lý hơn: 
--- - Tài xế 2, 7 xuất phát sớm (5h, 6h, 7h)
--- - Tài xế 8, 9 xuất phát muộn (từ 8h trở đi)
--- - Tài xế 3, 4 không chạy chuyến 5h, 6h (chỉ từ 7h trở đi)
--- - Tài xế 5, 6 chỉ chạy chiều Đà Nẵng về Tam Kỳ, không chạy Tam Kỳ đi Đà Nẵng
--- - 5 xe (1-5) chạy liên tục, xe 6,7,8 nghỉ trưa (delay từ 11h-13h)
+-- Insert Ca trước, sau đó insert ChiTietCa dựa trên mã Ca vừa tạo
+INSERT INTO Ca (gioXuatPhat, ngayXuatPhat, maHuyenXuatPhat) VALUES
+('05:00:00', '2024-05-02', 1),
+('06:00:00', '2024-05-02', 1),
+('07:00:00', '2024-05-02', 1),
+('08:00:00', '2024-05-02', 1),
+('09:00:00', '2024-05-02', 1),
+('10:00:00', '2024-05-02', 1),
+('11:00:00', '2024-05-02', 1),
+('12:00:00', '2024-05-02', 1),
+('13:00:00', '2024-05-02', 1),
+('14:00:00', '2024-05-02', 1),
+('15:00:00', '2024-05-02', 1),
+('07:00:00', '2024-05-02', 2),
+('08:00:00', '2024-05-02', 2),
+('09:00:00', '2024-05-02', 2),
+('10:00:00', '2024-05-02', 2),
+('11:00:00', '2024-05-02', 2),
+('12:00:00', '2024-05-02', 2),
+('13:00:00', '2024-05-02', 2),
+('14:00:00', '2024-05-02', 2),
+('15:00:00', '2024-05-02', 2),
+('16:00:00', '2024-05-02', 2),
+('17:00:00', '2024-05-02', 2);
 
--- Tam Kỳ đi Đà Nẵng: xuất phát từ 5h đến 15h
-INSERT INTO CaTaiXe (maTaiXe, maXe, gioXuatPhat, ngayXuatPhat, diaDiemXuatPhat) VALUES
--- 5h, 6h: chỉ tài xế 2, 7, 8, 9, xe 1-4
-(2, 1, '05:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '05:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '05:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '05:00:00', '2024-05-02', 'Tam Kỳ'),
-
-(2, 1, '06:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '06:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '06:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '06:00:00', '2024-05-02', 'Tam Kỳ'),
-
--- 7h: thêm tài xế 3, 4, xe 5
-(2, 1, '07:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '07:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '07:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '07:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '07:00:00', '2024-05-02', 'Tam Kỳ'),
-(4, 1, '07:00:00', '2024-05-02', 'Tam Kỳ'),
-
+-- Gán nhiều xe-tài xế cho mỗi ca đúng logic phân bổ
+-- Tam Kỳ đi Đà Nẵng (Ca 1-11)
+INSERT INTO ChiTietCa (maCa, maXe, maTaiXe) VALUES
+-- 5h, 6h, 7h: tài xế 2, 7, 8, 9, xe 1-4
+(1, 1, 2), (1, 2, 7), (1, 3, 8), (1, 4, 9),
+(2, 1, 2), (2, 2, 7), (2, 3, 8), (2, 4, 9),
+(3, 1, 2), (3, 2, 7), (3, 3, 8), (3, 4, 9), (3, 5, 3), (3, 6, 4),
 -- 8h-10h: tài xế 2,7,8,9,3,4, xe 1-6
-(2, 1, '08:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '08:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '08:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '08:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '08:00:00', '2024-05-02', 'Tam Kỳ'),
-(4, 6, '08:00:00', '2024-05-02', 'Tam Kỳ'),
-
-(2, 1, '09:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '09:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '09:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '09:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '09:00:00', '2024-05-02', 'Tam Kỳ'),
-(4, 6, '09:00:00', '2024-05-02', 'Tam Kỳ'),
-
-(2, 1, '10:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '10:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '10:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '10:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '10:00:00', '2024-05-02', 'Tam Kỳ'),
-(4, 6, '10:00:00', '2024-05-02', 'Tam Kỳ'),
-
--- 11h-13h: chỉ xe 1-5 chạy, xe 6,7,8 nghỉ trưa
-(2, 1, '11:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '11:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '11:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '11:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '11:00:00', '2024-05-02', 'Tam Kỳ'),
-
-(2, 1, '12:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '12:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '12:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '12:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '12:00:00', '2024-05-02', 'Tam Kỳ'),
-
-(2, 1, '13:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '13:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '13:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '13:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '13:00:00', '2024-05-02', 'Tam Kỳ'),
-
+(4, 1, 2), (4, 2, 7), (4, 3, 8), (4, 4, 9), (4, 5, 3), (4, 6, 4),
+(5, 1, 2), (5, 2, 7), (5, 3, 8), (5, 4, 9), (5, 5, 3), (5, 6, 4),
+(6, 1, 2), (6, 2, 7), (6, 3, 8), (6, 4, 9), (6, 5, 3), (6, 6, 4),
+-- 11h-13h: chỉ xe 1-5 chạy, xe 6,7,8 nghỉ trưa, tài xế 2,7,3,4
+(7, 1, 2), (7, 2, 7), (7, 3, 3), (7, 4, 4), (7, 5, 3),
+(8, 1, 2), (8, 2, 7), (8, 3, 3), (8, 4, 4), (8, 5, 3),
+(9, 1, 2), (9, 2, 7), (9, 3, 3), (9, 4, 4), (9, 5, 3),
 -- 14h-15h: tài xế 2,7,8,9,3,4, xe 1-6 quay lại chạy
-(2, 1, '14:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '14:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '14:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '14:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '14:00:00', '2024-05-02', 'Tam Kỳ'),
-(4, 6, '14:00:00', '2024-05-02', 'Tam Kỳ'),
+(10, 1, 2), (10, 2, 7), (10, 3, 8), (10, 4, 9), (10, 5, 3), (10, 6, 4),
+(11, 1, 2), (11, 2, 7), (11, 3, 8), (11, 4, 9), (11, 5, 3), (11, 6, 4);
 
-(2, 1, '15:00:00', '2024-05-02', 'Tam Kỳ'),
-(7, 2, '15:00:00', '2024-05-02', 'Tam Kỳ'),
-(8, 3, '15:00:00', '2024-05-02', 'Tam Kỳ'),
-(9, 4, '15:00:00', '2024-05-02', 'Tam Kỳ'),
-(3, 5, '15:00:00', '2024-05-02', 'Tam Kỳ'),
-(4, 6, '15:00:00', '2024-05-02', 'Tam Kỳ'),
-
--- Đà Nẵng về Tam Kỳ: xuất phát từ 7h đến 17h
--- Tài xế 5,6 chủ yếu chạy chiều này, các tài xế khác luân phiên, xe 1-6, xe 7,8 nghỉ trưa
-(5, 1, '07:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '07:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '07:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '07:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '07:00:00', '2024-05-02', 'Đà Nẵng'),
-(9, 6, '07:00:00', '2024-05-02', 'Đà Nẵng'),
-
-(5, 1, '08:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '08:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '08:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '08:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '08:00:00', '2024-05-02', 'Đà Nẵng'),
-(9, 6, '08:00:00', '2024-05-02', 'Đà Nẵng'),
-
-(5, 1, '09:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '09:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '09:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '09:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '09:00:00', '2024-05-02', 'Đà Nẵng'),
-(9, 6, '09:00:00', '2024-05-02', 'Đà Nẵng'),
-
-(5, 1, '10:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '10:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '10:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '10:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '10:00:00', '2024-05-02', 'Đà Nẵng'),
-(9, 6, '10:00:00', '2024-05-02', 'Đà Nẵng'),
-
--- 11h-13h: chỉ xe 1-5 chạy, xe 6,7,8 nghỉ trưa
-(5, 1, '11:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '11:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '11:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '11:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '11:00:00', '2024-05-02', 'Đà Nẵng'),
-
-(5, 1, '12:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '12:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '12:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '12:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '12:00:00', '2024-05-02', 'Đà Nẵng'),
-
-(5, 1, '13:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '13:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '13:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '13:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '13:00:00', '2024-05-02', 'Đà Nẵng'),
-
+-- Đà Nẵng về Tam Kỳ (Ca 12-22)
+INSERT INTO ChiTietCa (maCa, maXe, maTaiXe) VALUES
+-- 7h-10h: tài xế 5,6,2,7, xe 1-6
+(12, 1, 5), (12, 2, 6), (12, 3, 2), (12, 4, 7), (12, 5, 5), (12, 6, 6),
+(13, 1, 5), (13, 2, 6), (13, 3, 2), (13, 4, 7), (13, 5, 5), (13, 6, 6),
+(14, 1, 5), (14, 2, 6), (14, 3, 2), (14, 4, 7), (14, 5, 5), (14, 6, 6),
+(15, 1, 5), (15, 2, 6), (15, 3, 2), (15, 4, 7), (15, 5, 5), (15, 6, 6),
+-- 11h-13h: chỉ xe 1-5 chạy, xe 6,7,8 nghỉ trưa, tài xế 5,6,2,7
+(16, 1, 5), (16, 2, 6), (16, 3, 2), (16, 4, 7), (16, 5, 5),
+(17, 1, 5), (17, 2, 6), (17, 3, 2), (17, 4, 7), (17, 5, 5),
+(18, 1, 5), (18, 2, 6), (18, 3, 2), (18, 4, 7), (18, 5, 5),
 -- 14h-17h: xe 1-6, tài xế 5,6,2,7,8,9,3,4 luân phiên
-(5, 1, '14:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '14:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '14:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '14:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '14:00:00', '2024-05-02', 'Đà Nẵng'),
-(9, 6, '14:00:00', '2024-05-02', 'Đà Nẵng'),
-
-(5, 1, '15:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '15:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '15:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '15:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '15:00:00', '2024-05-02', 'Đà Nẵng'),
-(9, 6, '15:00:00', '2024-05-02', 'Đà Nẵng'),
-
-(5, 1, '16:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '16:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '16:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '16:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '16:00:00', '2024-05-02', 'Đà Nẵng'),
-(9, 6, '16:00:00', '2024-05-02', 'Đà Nẵng'),
-
-(5, 1, '17:00:00', '2024-05-02', 'Đà Nẵng'),
-(6, 2, '17:00:00', '2024-05-02', 'Đà Nẵng'),
-(2, 3, '17:00:00', '2024-05-02', 'Đà Nẵng'),
-(7, 4, '17:00:00', '2024-05-02', 'Đà Nẵng'),
-(8, 5, '17:00:00', '2024-05-02', 'Đà Nẵng'),
-(9, 6, '17:00:00', '2024-05-02', 'Đà Nẵng');
+(19, 1, 5), (19, 2, 6), (19, 3, 2), (19, 4, 7), (19, 5, 8), (19, 6, 9),
+(20, 1, 3), (20, 2, 4), (20, 3, 5), (20, 4, 6), (20, 5, 2), (20, 6, 7),
+(21, 1, 8), (21, 2, 9), (21, 3, 3), (21, 4, 4), (21, 5, 5), (21, 6, 6),
+(22, 1, 2), (22, 2, 7), (22, 3, 8), (22, 4, 9), (22, 5, 3), (22, 6, 4);
 
 -- Thêm dữ liệu địa điểm mẫu để đảm bảo các foreign key cho DatXe và ChiTietDatXe
 INSERT INTO DiaDiem (maDiaDiem, tenDiaDiem, viDo, kinhDo) VALUES

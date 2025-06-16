@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import NguoiDung, Cataixe, Chitietdatxe, Danhgia, Datxe, Nhanvien, Tuyenduong, Xe, Taixe, Diadiem
+from .models import NguoiDung, Ca, Chitietca, Chitietdatxe, Danhgia, Datxe, Nhanvien, Tuyenduong, Xe, Diadiem, Huyen
 
 class UserSerializer(serializers.ModelSerializer):
     vaitro = serializers.CharField(source='vaitro.tenvaitro', read_only=True)
@@ -17,28 +17,34 @@ class XeSerializer(serializers.ModelSerializer):
     def get_thongtin(self, obj):
         return f"{obj.biensoxe} - {obj.sochongoi} chỗ"
 
-class TaixeSerializer(serializers.ModelSerializer):
-    hoten = serializers.CharField(source='mataixe.hoten', read_only=True)
-    class Meta:
-        model = Taixe
-        fields = '__all__'
-
 class DiadiemSerializer(serializers.ModelSerializer):
     class Meta:
         model = Diadiem
         fields = ['madiadiem', 'tendiadiem', 'vido', 'kinhdo']
 
-class CataixeSerializer(serializers.ModelSerializer):
-    maxe = XeSerializer(read_only=True)
-    mataixe = TaixeSerializer(read_only=True)
+class HuyenSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Cataixe
+        model = Huyen
+        fields = ['mahuyen', 'tenhuyen']
+
+class CaSerializer(serializers.ModelSerializer):
+    mahuyenxuatphat = HuyenSerializer(read_only=True)
+    class Meta:
+        model = Ca
+        fields = '__all__'
+
+class ChitietcaSerializer(serializers.ModelSerializer):
+    maca = CaSerializer(read_only=True)
+    maxe = XeSerializer(read_only=True)
+    class Meta:
+        model = Chitietca
         fields = '__all__'
 
 class BookingDetailSerializer(serializers.ModelSerializer):
     diemdon = DiadiemSerializer(read_only=True)
     diemtra = DiadiemSerializer(read_only=True)
-    matuyenduong = serializers.CharField(source='matuyenduong.diemdon', read_only=True)
+    matuyenduong = serializers.CharField(source='matuyenduong.huyendon', read_only=True)
+    machitietca = ChitietcaSerializer(read_only=True)
     class Meta:
         model = Chitietdatxe
         fields = '__all__'
@@ -47,7 +53,7 @@ class BookingSerializer(serializers.ModelSerializer):
     chitietdatxe = BookingDetailSerializer(many=True, read_only=True, source='chitietdatxe_set')
     diemdon = DiadiemSerializer(read_only=True)
     diemtra = DiadiemSerializer(read_only=True)
-    maca = CataixeSerializer(read_only=True)
+    machitietca = ChitietcaSerializer(read_only=True)
     manguoidung = UserSerializer(read_only=True)
     class Meta:
         model = Datxe
@@ -86,9 +92,24 @@ class LoginSerializer(serializers.Serializer):
             'refresh': str(token),
         }
 
-class ShiftSerializer(serializers.ModelSerializer):
-    maxe = XeSerializer(read_only=True)
-    mataixe = TaixeSerializer(read_only=True)
+class CheckSlotInputSerializer(serializers.Serializer):
+    maca = serializers.IntegerField()
+    huong = serializers.IntegerField(help_text="1: Đà Nẵng đi Tam Kỳ, 2: Tam Kỳ đi Đà Nẵng")
+
+class GetDirectionInputSerializer(serializers.Serializer):
+    diemdon = serializers.IntegerField()
+    diemtra = serializers.IntegerField()
+
+class GetDistrictInputSerializer(serializers.Serializer):
+    madiadiem = serializers.IntegerField()
+
+class GetPriceInputSerializer(serializers.Serializer):
+    diemdon = serializers.IntegerField()
+    diemtra = serializers.IntegerField()
+
+class TuyenduongSerializer(serializers.ModelSerializer):
+    huyendon = HuyenSerializer(read_only=True)
+    huyentra = HuyenSerializer(read_only=True)
     class Meta:
-        model = Cataixe
+        model = Tuyenduong
         fields = '__all__'

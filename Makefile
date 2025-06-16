@@ -70,6 +70,7 @@ hash-user-password:
 
 update-database:
 	mysql -u root -pAbc123!@# hethongdatxe < HeThongDatXe.sql 
+	python manage.py makemigrations datxe_backend
 	python manage.py migrate 
 	python scripts/hash_user_password.py
 

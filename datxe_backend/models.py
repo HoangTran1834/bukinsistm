@@ -1,6 +1,16 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
+class Huyen(models.Model):
+    mahuyen = models.AutoField(db_column='maHuyen', primary_key=True)
+    tenhuyen = models.CharField(db_column='tenHuyen', max_length=100)
+
+    class Meta:
+        managed = False
+        db_table = 'Huyen'
+    def __str__(self):
+        return self.tenhuyen
+
 class Vaitro(models.Model):
     mavaitro = models.IntegerField(db_column='maVaiTro', primary_key=True)
     tenvaitro = models.CharField(db_column='tenVaiTro', max_length=15)
@@ -106,32 +116,40 @@ class Diadiem(models.Model):
 
 class Tuyenduong(models.Model):
     matuyenduong = models.AutoField(db_column='maTuyenDuong', primary_key=True)
-    diemdon = models.CharField(db_column='diemDon', max_length=25)
-    diemtra = models.CharField(db_column='diemTra', max_length=25)
+    huyendon = models.ForeignKey('Huyen', models.DO_NOTHING, db_column='huyenDon', related_name='tuyenduong_huyendon_set')
+    huyentra = models.ForeignKey('Huyen', models.DO_NOTHING, db_column='huyenTra', related_name='tuyenduong_huyentra_set')
     giacuoc = models.DecimalField(db_column='giaCuoc', max_digits=10, decimal_places=2)
 
     class Meta:
         managed = False
         db_table = 'TuyenDuong'
 
-class Cataixe(models.Model):
+class Ca(models.Model):
     maca = models.AutoField(db_column='maCa', primary_key=True)
-    mataixe = models.ForeignKey('Taixe', models.DO_NOTHING, db_column='maTaiXe')
-    maxe = models.ForeignKey('Xe', models.DO_NOTHING, db_column='maXe')
     gioxuatphat = models.TimeField(db_column='gioXuatPhat')
     ngayxuatphat = models.DateField(db_column='ngayXuatPhat')
-    diadiemxuatphat = models.CharField(db_column='diaDiemXuatPhat', max_length=25)
+    mahuyenxuatphat = models.ForeignKey('Huyen', models.DO_NOTHING, db_column='maHuyenXuatPhat')
 
     class Meta:
         managed = False
-        db_table = 'CaTaiXe'
+        db_table = 'Ca'
+
+class Chitietca(models.Model):
+    machitietca = models.AutoField(db_column='maChiTietCa', primary_key=True)
+    maca = models.ForeignKey('Ca', models.DO_NOTHING, db_column='maCa')
+    maxe = models.ForeignKey('Xe', models.DO_NOTHING, db_column='maXe')
+    mataixe = models.ForeignKey('Taixe', models.DO_NOTHING, db_column='maTaiXe')
+
+    class Meta:
+        managed = False
+        db_table = 'ChiTietCa'
 
 class Datxe(models.Model):
     madatxe = models.AutoField(db_column='maDatXe', primary_key=True)
     manguoidung = models.ForeignKey('NguoiDung', models.DO_NOTHING, db_column='maNguoiDung')
     thoigiandat = models.DateTimeField(db_column='thoiGianDat')
     manhanvien = models.ForeignKey('Nhanvien', models.DO_NOTHING, db_column='maNhanVien', blank=True, null=True)
-    maca = models.ForeignKey('Cataixe', models.DO_NOTHING, db_column='maCa')
+    machitietca = models.ForeignKey('Chitietca', models.DO_NOTHING, db_column='maChiTietCa')
     diemtra = models.ForeignKey('Diadiem', models.DO_NOTHING, db_column='diemTra')
     diemdon = models.ForeignKey('Diadiem', models.DO_NOTHING, db_column='diemDon', related_name='datxe_diemdon_set')
     matuyenduong = models.ForeignKey('Tuyenduong', models.DO_NOTHING, db_column='maTuyenDuong')
@@ -146,7 +164,7 @@ class Datxe(models.Model):
 class Chitietdatxe(models.Model):
     machitiet = models.AutoField(db_column='maChiTiet', primary_key=True)
     madatxe = models.ForeignKey('Datxe', models.DO_NOTHING, db_column='maDatXe')
-    maca = models.ForeignKey('Cataixe', models.DO_NOTHING, db_column='maCa')
+    machitietca = models.ForeignKey('Chitietca', models.DO_NOTHING, db_column='maChiTietCa')
     tenkhach = models.CharField(db_column='tenKhach', max_length=50)
     sodienthoaikhach = models.CharField(db_column='soDienThoaiKhach', max_length=20)
     diemtra = models.ForeignKey('Diadiem', models.DO_NOTHING, db_column='diemTra')

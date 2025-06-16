@@ -33,6 +33,7 @@ Chạy lần lượt các lệnh sau (có thể copy từ Makefile):
 
 ```sh
 mysql -u root -pAbc123!@# hethongdatxe < HeThongDatXe.sql
+python manage.py makemigrations datxe_backend
 python manage.py migrate
 python scripts/hash_user_password.py
 ```
