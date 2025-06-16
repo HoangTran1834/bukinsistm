@@ -1,21 +1,54 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import NguoiDung, Cataixe, Chitietdatxe, Danhgia, Datxe, Nhanvien, Tuyenduong
+from .models import NguoiDung, Cataixe, Chitietdatxe, Danhgia, Datxe, Nhanvien, Tuyenduong, Xe, Taixe, Diadiem
 
 class UserSerializer(serializers.ModelSerializer):
+    vaitro = serializers.CharField(source='vaitro.tenvaitro', read_only=True)
     class Meta:
         model = NguoiDung
         fields = '__all__'
-               
+
+class XeSerializer(serializers.ModelSerializer):
+    thongtin = serializers.SerializerMethodField()
+    class Meta:
+        model = Xe
+        fields = '__all__'
+    def get_thongtin(self, obj):
+        return f"{obj.biensoxe} - {obj.sochongoi} chỗ"
+
+class TaixeSerializer(serializers.ModelSerializer):
+    hoten = serializers.CharField(source='mataixe.hoten', read_only=True)
+    class Meta:
+        model = Taixe
+        fields = '__all__'
+
+class DiadiemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Diadiem
+        fields = ['madiadiem', 'tendiadiem', 'vido', 'kinhdo']
+
+class CataixeSerializer(serializers.ModelSerializer):
+    maxe = XeSerializer(read_only=True)
+    mataixe = TaixeSerializer(read_only=True)
+    class Meta:
+        model = Cataixe
+        fields = '__all__'
+
 class BookingDetailSerializer(serializers.ModelSerializer):
+    diemdon = DiadiemSerializer(read_only=True)
+    diemtra = DiadiemSerializer(read_only=True)
+    matuyenduong = serializers.CharField(source='matuyenduong.diemdon', read_only=True)
     class Meta:
         model = Chitietdatxe
         fields = '__all__'
 
 class BookingSerializer(serializers.ModelSerializer):
     chitietdatxe = BookingDetailSerializer(many=True, read_only=True, source='chitietdatxe_set')
-
+    diemdon = DiadiemSerializer(read_only=True)
+    diemtra = DiadiemSerializer(read_only=True)
+    maca = CataixeSerializer(read_only=True)
+    manguoidung = UserSerializer(read_only=True)
     class Meta:
         model = Datxe
         fields = '__all__'
@@ -54,7 +87,8 @@ class LoginSerializer(serializers.Serializer):
         }
 
 class ShiftSerializer(serializers.ModelSerializer):
+    maxe = XeSerializer(read_only=True)
+    mataixe = TaixeSerializer(read_only=True)
     class Meta:
         model = Cataixe
         fields = '__all__'
-        
