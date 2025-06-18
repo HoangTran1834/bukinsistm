@@ -228,12 +228,35 @@ class CreateBookingSerializer(serializers.ModelSerializer):
                 except:
                     # Nếu không tìm được tuyến đường cho chi tiết, dùng tuyến đường của booking chính
                     chitiet_data['matuyenduong'] = validated_data.get('matuyenduong')
-            
             Chitietdatxe.objects.create(
                 madatxe=booking, 
                 trangthai="Đã đặt",
                 **chitiet_data
             )
+        
+        # Auto-assign: Tự động gọi assign_driver_for_shift cho ca chứa booking này
+        print(f"🚌 [AUTO-ASSIGN] Booking {booking.madatxe} đã tạo thành công, bắt đầu auto-assign cho ca {booking.maca.maca}")
+        try:
+            from .views import RouteViewSet
+            route_viewset = RouteViewSet()
+            
+            # Tạo fake request để gọi assign_driver_for_shift
+            class FakeRequest:
+                def __init__(self, ca_id):
+                    self.data = {'ca_id': ca_id}
+            
+            fake_request = FakeRequest(booking.maca.maca)
+            assign_response = route_viewset.assign_driver_for_shift(fake_request)
+            
+            if assign_response.status_code == 200:
+                print(f"🚌 [AUTO-ASSIGN] ✅ Thành công auto-assign cho ca {booking.maca.maca}")
+                print(f"🚌 [AUTO-ASSIGN] {assign_response.data.get('message', '')}")
+            else:
+                print(f"🚌 [AUTO-ASSIGN] ⚠️ Không thể auto-assign cho ca {booking.maca.maca}: {assign_response.data}")
+                
+        except Exception as e:
+            print(f"🚌 [AUTO-ASSIGN] ❌ Lỗi khi auto-assign cho ca {booking.maca.maca}: {str(e)}")
+            # Không raise exception để không ảnh hưởng việc tạo booking
         
         return booking
         
@@ -271,7 +294,7 @@ class LoginSerializer(serializers.Serializer):
         }
 
 class CheckSlotInputSerializer(serializers.Serializer):
-    maca = serializers.IntegerField()
+    machitietca = serializers.IntegerField(help_text="Mã chi tiết ca cần kiểm tra")
     huong = serializers.IntegerField(help_text="1: Đà Nẵng đi Tam Kỳ, 2: Tam Kỳ đi Đà Nẵng")
 
 class GetDirectionInputSerializer(serializers.Serializer):

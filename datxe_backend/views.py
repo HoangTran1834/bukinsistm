@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError, AccessToken
 from drf_spectacular.utils import extend_schema, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 from .models import NguoiDung, Datxe, Chitietdatxe, Danhgia, Nhanvien, Tuyenduong, Ca, Chitietca, Taixe, Xe, Diadiem
 from .serializers import UserSerializer, SignupSerializer, LoginSerializer, BookingSerializer, CreateBookingSerializer, BookingDetailSerializer, CheckSlotInputSerializer, GetDirectionInputSerializer, GetDistrictInputSerializer, GetPriceInputSerializer, TuyenduongSerializer, HuyenSerializer, CaSerializer, CaCreateUpdateSerializer, ChitietcaSerializer, TaixeSerializer, XeSerializer, CreateShiftDetailSerializer, DiadiemSerializer, CreateDiadiemSerializer, GetHuyenInputSerializer, GetHuyenOutputSerializer, GetTuyenDuongInputSerializer, GetTuyenDuongByCoordinatesInputSerializer, GetCaByDateInputSerializer, AssignDriverInputSerializer
 from .models_access_blacklist import BlacklistedAccessToken
@@ -308,9 +309,8 @@ class BookingViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'create':
             return CreateBookingSerializer
-        return BookingSerializer    
-    @extend_schema(
-        description="Tạo mới một booking (đặt xe). Bắt buộc nhập mã ca để xác định giờ xuất phát và hướng di chuyển. Tuyến đường sẽ được tự động tìm từ điểm đi và điểm đến.",
+        return BookingSerializer      @extend_schema(
+        description="Tạo mới một booking (đặt xe). Bắt buộc nhập mã ca để xác định giờ xuất phát và hướng di chuyển. Tuyến đường sẽ được tự động tìm từ điểm đi và điểm đến. SAU KHI TẠO BOOKING THÀNH CÔNG, HỆ THỐNG SẼ TỰ ĐỘNG GỌI assign_driver_for_shift ĐỂ PHÂN BỔ LẠI TOÀN BỘ CA MỘT CÁCH TỐI ƯU.",
         request=CreateBookingSerializer,
         responses={201: BookingSerializer},
         examples=[                  OpenApiExample(                
@@ -337,13 +337,23 @@ class BookingViewSet(viewsets.ModelViewSet):
     )
     def create(self, request, *args, **kwargs):
         # Logic tạo booking và tìm tuyến đường đã được chuyển vào CreateBookingSerializer
+        # CreateBookingSerializer.create() cũng sẽ tự động gọi assign_driver_for_shift
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         booking = serializer.save()
         
         # Trả về response với BookingSerializer để hiển thị đầy đủ thông tin
         response_serializer = BookingSerializer(booking)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        response_data = response_serializer.data
+        
+        # Thêm thông tin về auto-assign
+        response_data['auto_assign_info'] = {
+            'message': 'Hệ thống đã tự động phân bổ lại toàn bộ ca sau khi tạo booking',
+            'ca_id': booking.maca.maca,
+            'note': 'Kiểm tra log để xem chi tiết quá trình auto-assign'
+        }
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         description="Tự động xếp hành khách vào chi tiết ca còn chỗ. Chỉ cần cung cấp thông tin khách, hướng, thời gian mong muốn. API sẽ tự xếp vào chi tiết ca còn chỗ đầu tiên.",
@@ -363,39 +373,233 @@ class BookingViewSet(viewsets.ModelViewSet):
                 'Tự động xếp mẫu',
                 value={"tenkhach": "Nguyen Van C", "sodienthoaikhach": "0912345678", "huong": 1, "thoigian": "2025-06-16T08:00:00"},
                 request_only=True,
-            ),
-        ],
+            ),        ],
     )
     
     @extend_schema(
-        description="Kiểm tra số chỗ còn lại trong một chi tiết ca theo hướng và thời gian. Trả về tổng số chỗ, số khách đã đặt, số chỗ còn lại.",
-        request=CheckSlotInputSerializer,
-        responses={200: OpenApiExample('Kết quả', value={"sochongoi": 16, "sokhach": 10, "conlai": 6})},
+        description="Kiểm tra số chỗ còn trống theo ca (khuyến nghị) hoặc chi tiết ca. API trả về thông tin rõ ràng để frontend dễ xử lý: can_book (có thể đặt), slots_available (số chỗ trống), slots_needed (số chỗ cần).",
+        request=OpenApiTypes.OBJECT,
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean", "example": True},
+                    "can_book": {"type": "boolean", "example": True, "description": "Có thể đặt booking không"},
+                    "slots_available": {"type": "integer", "example": 15, "description": "Số chỗ trống"},
+                    "slots_needed": {"type": "integer", "example": 2, "description": "Số chỗ cần"},
+                    "message": {"type": "string", "example": "Ca có 15 chỗ trống, đủ cho 2 ghế cần thiết"}
+                }
+            }
+        },
         examples=[
             OpenApiExample(
-                'Check slot mẫu',
-                value={"machitietca": 1, "huong": 1},
+                'Kiểm tra slot theo ca (khuyến nghị)',
+                summary='Kiểm tra toàn bộ ca',
+                description='Sử dụng ca_id để kiểm tra tổng số chỗ trống trong tất cả xe của ca',
+                value={"ca_id": 1, "soghe_can": 2},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Kiểm tra slot theo xe cụ thể',
+                summary='Kiểm tra xe cụ thể (tương thích API cũ)',
+                description='Sử dụng machitietca để kiểm tra chỗ trống của xe cụ thể',
+                value={"machitietca": 1, "soghe_can": 1},
                 request_only=True,
             ),
         ],
     )
+    
     @action(detail=False, methods=['post'], url_path='check_slot', permission_classes=[IsAuthenticated])
     def check_slot(self, request):
-        machitietca = int(request.data.get('machitietca'))
-        huong = int(request.data.get('huong'))
-        if huong == 1:
-            diemdon, diemtra = 1, 2
-        else:
-            diemdon, diemtra = 2, 1
+        """
+        Kiểm tra số ghế còn trống theo ca (ưu tiên) hoặc chi tiết ca.
+        Input:
+        - ca_id: Kiểm tra toàn bộ ca (khuyến nghị cho frontend)
+        - machitietca: Kiểm tra xe cụ thể (để tương thích với API cũ)
+        - soghe_can: Số ghế cần kiểm tra (mặc định 1)
+        
+        Response rõ ràng cho frontend:
+        - can_book: có thể đặt không
+        - slots_available: số chỗ trống
+        - slots_needed: số chỗ cần
+        """
         try:
+            ca_id = request.data.get('ca_id')
+            machitietca = request.data.get('machitietca')
+            soghe_can = request.data.get('soghe_can', 1)
+            
+            # Ưu tiên kiểm tra theo ca_id (cho frontend)
+            if ca_id:
+                return self._check_slot_by_ca(ca_id, soghe_can)
+            elif machitietca:
+                return self._check_slot_by_chitietca(machitietca, soghe_can)
+            else:
+                return Response({
+                    "error": "Cần cung cấp ca_id (kiểm tra toàn ca) hoặc machitietca (kiểm tra xe cụ thể)",
+                    "suggestion": "Khuyến nghị sử dụng ca_id để kiểm tra toàn bộ ca"
+                }, status=400)
+            
+        except ValueError as e:
+            return Response({"error": f"Dữ liệu đầu vào không hợp lệ: {str(e)}"}, status=400)
+        except Exception as e:
+            print(f"🎫 [CHECK_SLOT] Lỗi: {str(e)}")
+            return Response({"error": f"Lỗi hệ thống: {str(e)}"}, status=500)
+    
+    def _check_slot_by_ca(self, ca_id, soghe_can):
+        """Kiểm tra slot theo ca - logic chính cho frontend"""
+        try:
+            ca_id = int(ca_id)
+            soghe_can = int(soghe_can)
+            
+            print(f"🎫 [CHECK_SLOT_CA] Kiểm tra slot cho ca {ca_id}, cần {soghe_can} ghế")
+            
+            # Lấy thông tin ca
+            ca = Ca.objects.get(maca=ca_id)
+            print(f"🎫 [CHECK_SLOT_CA] Ca: {ca.gioxuatphat} ngày {ca.ngayxuatphat}")
+            
+            # Lấy danh sách xe trong ca
+            chitietca_list = list(Chitietca.objects.select_related('maxe', 'mataixe').filter(maca=ca_id))
+            if not chitietca_list:
+                return Response({
+                    "success": False,
+                    "can_book": False,
+                    "error": "Không có xe nào trong ca này",
+                    "ca_id": ca_id,
+                    "slots_available": 0,
+                    "slots_needed": soghe_can
+                }, status=400)
+            
+            # Tính tổng capacity
+            total_capacity = sum(cc.maxe.sochongoi for cc in chitietca_list)
+            
+            # Đếm ghế đã sử dụng trong ca
+            datxe_list = list(Datxe.objects.filter(maca=ca_id))
+            total_seats_datxe = sum(dx.soghe for dx in datxe_list)
+            
+            chitietdatxe_list = list(Chitietdatxe.objects.filter(madatxe__maca=ca_id))
+            total_seats_chitiet = sum(
+                getattr(ct, 'soghe', 0) or ct.madatxe.soghe 
+                for ct in chitietdatxe_list
+            )
+            
+            total_used = total_seats_datxe + total_seats_chitiet
+            slots_available = total_capacity - total_used
+            can_book = slots_available >= soghe_can
+            
+            print(f"🎫 [CHECK_SLOT_CA] Capacity: {total_capacity}, đã dùng: {total_used}, còn: {slots_available}")
+            print(f"🎫 [CHECK_SLOT_CA] Cần {soghe_can} ghế → {'✅ CÓ THỂ ĐẶT' if can_book else '❌ KHÔNG ĐỦ CHỖ'}")
+            
+            # Chi tiết từng xe (cho debug)
+            xe_details = []
+            for cc in chitietca_list:
+                xe_datxe = [dx for dx in datxe_list if dx.machitietca_id == cc.machitietca]
+                xe_chitiet = [ct for ct in chitietdatxe_list if ct.machitietca_id == cc.machitietca]
+                
+                xe_used = sum(dx.soghe for dx in xe_datxe) + sum(getattr(ct, 'soghe', 0) or ct.madatxe.soghe for ct in xe_chitiet)
+                xe_available = cc.maxe.sochongoi - xe_used
+                
+                xe_details.append({
+                    "machitietca": cc.machitietca,
+                    "bien_so": cc.maxe.biensoxe,
+                    "tai_xe": cc.mataixe.mataixe.hoten,
+                    "capacity": cc.maxe.sochongoi,
+                    "used": xe_used,
+                    "available": xe_available
+                })
+            
+            return Response({
+                "success": True,
+                "can_book": can_book,
+                "ca_id": ca_id,
+                "slots_available": slots_available,
+                "slots_needed": soghe_can,
+                "slots_total": total_capacity,
+                "slots_used": total_used,
+                "message": f"Ca có {slots_available} chỗ trống, {'đủ' if can_book else 'không đủ'} cho {soghe_can} ghế cần thiết",
+                "ca_info": {
+                    "gio_xuat_phat": str(ca.gioxuatphat),
+                    "ngay_xuat_phat": str(ca.ngayxuatphat),
+                    "so_xe": len(chitietca_list)
+                },
+                "summary": {
+                    "total_bookings": len(datxe_list),
+                    "total_details": len(chitietdatxe_list),
+                    "seats_from_bookings": total_seats_datxe,
+                    "seats_from_details": total_seats_chitiet
+                },
+                "xe_details": xe_details
+            })
+            
+        except Ca.DoesNotExist:
+            return Response({
+                "success": False,
+                "can_book": False,
+                "error": f"Không tìm thấy ca với ID {ca_id}",
+                "ca_id": ca_id,
+                "slots_available": 0,
+                "slots_needed": soghe_can
+            }, status=404)
+    
+    def _check_slot_by_chitietca(self, machitietca, soghe_can):
+        """Kiểm tra slot theo chi tiết ca - để tương thích API cũ"""
+        try:
+            machitietca = int(machitietca)
+            soghe_can = int(soghe_can)
+            
+            print(f"🎫 [CHECK_SLOT_XE] Kiểm tra slot cho xe {machitietca}, cần {soghe_can} ghế")
+            
+            # Lấy thông tin chi tiết ca
             chitietca = Chitietca.objects.get(machitietca=machitietca)
-            xe = getattr(chitietca, 'maxe', None)
-            sochongoi = getattr(xe, 'sochongoi', 0) if xe else 0
-            datxe_ids = Datxe.objects.filter(machitietca=chitietca).values_list('madatxe', flat=True)
-            sokhach = Chitietdatxe.objects.filter(madatxe_id__in=datxe_ids, diemdon=diemdon, diemtra=diemtra).count()
-            return Response({"sochongoi": sochongoi, "sokhach": sokhach, "conlai": sochongoi - sokhach})
+            xe = chitietca.maxe
+            capacity = xe.sochongoi if xe else 0
+            
+            # Đếm ghế đã sử dụng
+            datxe_list = Datxe.objects.filter(machitietca=machitietca)
+            seats_datxe = sum(dx.soghe for dx in datxe_list)
+            
+            chitietdatxe_list = Chitietdatxe.objects.filter(machitietca=machitietca)
+            seats_chitiet = sum(
+                getattr(ct, 'soghe', 0) or ct.madatxe.soghe 
+                for ct in chitietdatxe_list
+            )
+            
+            total_used = seats_datxe + seats_chitiet
+            slots_available = capacity - total_used
+            can_book = slots_available >= soghe_can
+            
+            print(f"🎫 [CHECK_SLOT_XE] Xe {xe.biensoxe}: {slots_available}/{capacity} chỗ trống")
+            
+            return Response({
+                "success": True,
+                "can_book": can_book,
+                "machitietca": machitietca,
+                "slots_available": slots_available,
+                "slots_needed": soghe_can,
+                "slots_total": capacity,
+                "slots_used": total_used,
+                "message": f"Xe có {slots_available} chỗ trống, {'đủ' if can_book else 'không đủ'} cho {soghe_can} ghế cần thiết",
+                "xe_info": {
+                    "bien_so": xe.biensoxe if xe else None,
+                    "tai_xe": chitietca.mataixe.mataixe.hoten,
+                    "capacity": capacity
+                },
+                "detail": {
+                    "bookings_count": len(datxe_list),
+                    "details_count": len(chitietdatxe_list),
+                    "seats_from_bookings": seats_datxe,
+                    "seats_from_details": seats_chitiet
+                }
+            })
+            
         except Chitietca.DoesNotExist:
-            return Response({"error": "Không tìm thấy chi tiết ca."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({
+                "success": False,
+                "can_book": False,
+                "error": f"Không tìm thấy chi tiết ca {machitietca}",
+                "machitietca": machitietca,
+                "slots_available": 0,
+                "slots_needed": soghe_can
+            }, status=404)
 
     @extend_schema(
         description="Tạo địa điểm mới với tên và tọa độ lat/lon",
@@ -557,12 +761,14 @@ class RouteViewSet(viewsets.ViewSet):
             return Response({"error": "Chỉ admin mới có quyền truy cập."}, status=status.HTTP_403_FORBIDDEN)
         routes = Tuyenduong.objects.all()
         serializer = TuyenduongSerializer(routes, many=True)
-        return Response(serializer.data)
-
+        return Response(serializer.data)    
+    
     @extend_schema(**get_price_schema())
     @action(detail=False, methods=['post'], url_path='get_price')
     def get_price(self, request):
         """Tính giá tiền cho chuyến đi"""
+        
+        print(f"💰 [GET_PRICE] Bắt đầu tính giá cho chuyến đi")
         
         # Kiểm tra xem có đầy đủ thông tin tọa độ không
         lat_don = request.data.get('lat_don')
@@ -574,15 +780,32 @@ class RouteViewSet(viewsets.ViewSet):
         diachi_don = request.data.get('diachi_don')
         diachi_tra = request.data.get('diachi_tra')
         
+        print(f"💰 [GET_PRICE] Thông tin đầu vào:")
+        print(f"  - Tọa độ: đón({lat_don}, {lon_don}), trả({lat_tra}, {lon_tra})")
+        print(f"  - Địa chỉ: đón('{diachi_don}'), trả('{diachi_tra}')")
+        
+        route_response = None
+        
         # Trường hợp 1: Có đầy đủ tọa độ
         if all([lat_don, lon_don, lat_tra, lon_tra]):
-            route_response = self.find_route_by_coordinates(lat_don, lon_don, lat_tra, lon_tra)
+            try:
+                lat_don, lon_don = float(lat_don), float(lon_don)
+                lat_tra, lon_tra = float(lat_tra), float(lon_tra)
+                print(f"💰 [GET_PRICE] Sử dụng tọa độ để tìm tuyến đường")
+                route_response = self.find_route_by_coordinates(lat_don, lon_don, lat_tra, lon_tra)
+            except (ValueError, TypeError) as e:
+                return Response({
+                    "success": False,
+                    "message": f"Tọa độ không hợp lệ: {str(e)}",
+                    "error_type": "invalid_coordinates"
+                }, status=400)
         
         # Trường hợp 2: Có đầy đủ địa chỉ
         elif all([diachi_don, diachi_tra]):
+            print(f"💰 [GET_PRICE] Sử dụng địa chỉ để tìm tuyến đường")
             # Tạo request giả lập để gọi API get_tuyen_duong
             temp_request = type('obj', (object,), {'data': {'diachi_don': diachi_don, 'diachi_tra': diachi_tra}})
-              # Sử dụng hàm get_tuyen_duong để tìm tuyến đường từ địa chỉ
+            # Sử dụng hàm get_tuyen_duong để tìm tuyến đường từ địa chỉ
             route_response = self.get_tuyen_duong(temp_request)
         
         # Trường hợp 3: Không đủ thông tin
@@ -590,33 +813,82 @@ class RouteViewSet(viewsets.ViewSet):
             return Response({
                 "success": False,
                 "message": "Không đủ thông tin để xác định tuyến đường. Cần cung cấp hoặc (1) cả 2 địa chỉ đón/trả hoặc (2) cả 4 tọa độ đón/trả.",
-                "error_type": "missing_information"
+                "error_type": "missing_information",
+                "required": {
+                    "option_1": ["diachi_don", "diachi_tra"],
+                    "option_2": ["lat_don", "lon_don", "lat_tra", "lon_tra"]
+                }
             }, status=400)
             
         # Nếu không tìm thấy tuyến đường, trả về lỗi
-        if route_response.status_code != 200:
-            return route_response
+        if not route_response or route_response.status_code != 200:
+            error_msg = "Không thể tìm thấy tuyến đường"
+            if route_response and hasattr(route_response, 'data'):
+                error_msg = route_response.data.get('message', error_msg)
+            
+            print(f"💰 [GET_PRICE] Lỗi tìm tuyến đường: {error_msg}")
+            return Response({
+                "success": False,
+                "message": error_msg,
+                "error_type": "route_not_found"
+            }, status=404)
             
         # Tìm thấy tuyến đường, tính giá
         try:
             route_data = route_response.data
             tuyenduong = route_data.get('tuyenduong')
-            giacuoc = float(tuyenduong.get('giacuoc', 0))
+            
+            if not tuyenduong:
+                return Response({
+                    "success": False,
+                    "message": "Không tìm thấy thông tin tuyến đường",
+                    "error_type": "invalid_route_data"
+                }, status=400)
+            
+            giacuoc = tuyenduong.get('giacuoc')
+            if giacuoc is None:
+                return Response({
+                    "success": False,
+                    "message": "Không tìm thấy thông tin giá cước",
+                    "error_type": "missing_price"
+                }, status=400)
+            
+            try:
+                giacuoc = float(giacuoc)
+            except (ValueError, TypeError):
+                return Response({
+                    "success": False,
+                    "message": "Giá cước không hợp lệ",
+                    "error_type": "invalid_price"
+                }, status=400)
+            
+            print(f"💰 [GET_PRICE] Tìm thấy tuyến đường: {tuyenduong.get('tentuyen', 'N/A')}")
+            print(f"💰 [GET_PRICE] Giá cước: {giacuoc:,.0f} VNĐ")
             
             # Trả về kết quả với giá tiền và thông tin tuyến đường
             result = {
                 "success": True,
                 "giatien": giacuoc,
+                "thong_tin_tuyen": {
+                    "tentuyen": tuyenduong.get('tentuyen'),
+                    "khoangcach": tuyenduong.get('khoangcach'),
+                    "thoigian": tuyenduong.get('thoigian'),
+                    "giacuoc": giacuoc
+                }
             }
             
             # Copy các thông tin khác từ route_response
             for key in route_data:
-                if key != 'message':  # Không copy message để tránh nhầm lẫn
+                if key not in ['message', 'tuyenduong']:  # Tránh duplicate
                     result[key] = route_data[key]
+            
+            # Thêm lại tuyenduong để đảm bảo completeness
+            result['tuyenduong'] = tuyenduong
                     
             return Response(result)
             
         except Exception as e:
+            print(f"💰 [GET_PRICE] Lỗi khi xử lý dữ liệu: {str(e)}")
             return Response({
                 "success": False,
                 "message": f"Lỗi khi tính giá: {str(e)}",
@@ -796,6 +1068,9 @@ class RouteViewSet(viewsets.ViewSet):
         """
         API nhận vào ca_id, tự lấy danh sách tài xế (Chitietca) và danh sách đặt xe + chi tiết đặt xe có mã ca trùng,
         tính tổng số ghế cần thiết, chia đều khách cho tài xế theo capacity xe.
+        
+        QUAN TRỌNG: API này sẽ GHI ĐÈ tự động assignment cũ (nếu có) mà không cảnh báo.
+        Tất cả đặt xe và chi tiết đặt xe thuộc ca sẽ được assign lại theo thuật toán VRP tối ưu.
         """
         from django.db import transaction
         
@@ -815,18 +1090,31 @@ class RouteViewSet(viewsets.ViewSet):
             if not chitietca_list:
                 return Response({'error': 'Không có tài xế nào trong ca này'}, status=400)
             
-            print(f"🚌 [ASSIGN] Tìm thấy {len(chitietca_list)} tài xế trong ca")
-              # 3. Lấy tất cả đặt xe có maca = ca_id và chưa được assign (machitietca = null)
+            print(f"🚌 [ASSIGN] Tìm thấy {len(chitietca_list)} tài xế trong ca")              # 3. Lấy tất cả đặt xe có maca = ca_id (bao gồm cả đã assign và chưa assign)
             datxe_list = list(Datxe.objects.select_related('manguoidung', 'diemdon', 'diemtra').filter(
                 maca=ca_id
             ))
             print(f"🚌 [ASSIGN] Tìm thấy {len(datxe_list)} đặt xe chính với mã ca {ca_id}")
             
-            # 4. Lấy tất cả chi tiết đặt xe thuộc về các đặt xe trên và chưa được assign
+            # Đếm số đặt xe đã assign và chưa assign
+            datxe_assigned = [dx for dx in datxe_list if dx.machitietca_id is not None]
+            datxe_unassigned = [dx for dx in datxe_list if dx.machitietca_id is None]
+            print(f"🚌 [ASSIGN] Đặt xe: {len(datxe_assigned)} đã assign (sẽ ghi đè), {len(datxe_unassigned)} chưa assign")
+            
+            # 4. Lấy tất cả chi tiết đặt xe thuộc về các đặt xe trên (bao gồm cả đã assign và chưa assign)
             chitietdatxe_list = list(Chitietdatxe.objects.select_related('madatxe', 'diemdon', 'diemtra').filter(
                 madatxe__maca=ca_id
             ))
             print(f"🚌 [ASSIGN] Tìm thấy {len(chitietdatxe_list)} chi tiết đặt xe")
+            
+            # Đếm số chi tiết đặt xe đã assign và chưa assign
+            chitiet_assigned = [ct for ct in chitietdatxe_list if ct.machitietca_id is not None]
+            chitiet_unassigned = [ct for ct in chitietdatxe_list if ct.machitietca_id is None]
+            print(f"🚌 [ASSIGN] Chi tiết: {len(chitiet_assigned)} đã assign (sẽ ghi đè), {len(chitiet_unassigned)} chưa assign")
+            
+            # Cảnh báo khi ghi đè assignment cũ
+            if datxe_assigned or chitiet_assigned:
+                print(f"⚠️  [ASSIGN] CẢNH BÁO: Sẽ ghi đè {len(datxe_assigned)} đặt xe và {len(chitiet_assigned)} chi tiết đã được assign!")
               # 5. Tạo danh sách hành khách (bao gồm cả đặt xe chính và chi tiết)
             passengers = []
             
@@ -907,8 +1195,11 @@ class RouteViewSet(viewsets.ViewSet):
                             datxe_obj.machitietca_id = machitietca
                             datxe_obj.save(update_fields=['machitietca'])
                             total_updated_datxe += 1
-                            print(f"  {i:2d}. ✅ ĐẶT XE {datxe_obj.madatxe}: {passenger['ten']} (SĐT: {passenger['sdt']}, {passenger['soghe']} ghế)")
-                            print(f"       🔄 machitietca: {old_machitietca} → {machitietca}")
+                            
+                            status_icon = "🔄" if old_machitietca else "✨"
+                            action = "GHI ĐÈ" if old_machitietca else "GÁN MỚI"
+                            print(f"  {i:2d}. {status_icon} ĐẶT XE {datxe_obj.madatxe}: {passenger['ten']} (SĐT: {passenger['sdt']}, {passenger['soghe']} ghế)")
+                            print(f"       🎯 {action}: machitietca {old_machitietca or 'NULL'} → {machitietca}")
                             print(f"       📍 {passenger['diemdon']} → {passenger['diemtra']}")
                             
                         elif passenger['type'] == 'chitietdatxe':
@@ -917,17 +1208,23 @@ class RouteViewSet(viewsets.ViewSet):
                             chitiet_obj.machitietca_id = machitietca
                             chitiet_obj.save(update_fields=['machitietca'])
                             total_updated_chitiet += 1
-                            print(f"  {i:2d}. ✅ CHI TIẾT {chitiet_obj.machitiet}: {passenger['ten']} (SĐT: {passenger['sdt']}, {passenger['soghe']} ghế)")
-                            print(f"       🔄 machitietca: {old_machitietca} → {machitietca}")
+                            
+                            status_icon = "🔄" if old_machitietca else "✨"
+                            action = "GHI ĐÈ" if old_machitietca else "GÁN MỚI"
+                            print(f"  {i:2d}. {status_icon} CHI TIẾT {chitiet_obj.machitiet}: {passenger['ten']} (SĐT: {passenger['sdt']}, {passenger['soghe']} ghế)")
+                            print(f"       🎯 {action}: machitietca {old_machitietca or 'NULL'} → {machitietca}")
                             print(f"       📍 {passenger['diemdon']} → {passenger['diemtra']}")
                             print(f"       🔗 Thuộc đặt xe: {chitiet_obj.madatxe.madatxe}")
-                    
                     print(f"")  # Dòng trống giữa các xe
                 
                 print(f"🚌 [ASSIGN] ✅ HOÀN THÀNH CẬP NHẬT:")
                 print(f"         - Đặt xe chính: {total_updated_datxe}")
                 print(f"         - Chi tiết đặt xe: {total_updated_chitiet}")
                 print(f"         - Tổng cộng: {total_updated_datxe + total_updated_chitiet} bản ghi")
+                
+                if datxe_assigned or chitiet_assigned:
+                    total_overwritten = len([dx for dx in datxe_list if dx.madatxe in [p['id'] for assignment in assignments.values() for p in assignment['passengers'] if p['type'] == 'datxe' and datxe_assigned]]) + len([ct for ct in chitietdatxe_list if ct.machitiet in [p['id'] for assignment in assignments.values() for p in assignment['passengers'] if p['type'] == 'chitietdatxe' and chitiet_assigned]])
+                    print(f"🔄 [ASSIGN] Đã ghi đè assignment cũ cho {len(datxe_assigned)} đặt xe + {len(chitiet_assigned)} chi tiết")
             
             # 9. Tạo kết quả trả về
             result = {}
@@ -957,16 +1254,26 @@ class RouteViewSet(viewsets.ViewSet):
                         } for p in assignment['passengers']
                     ]
                 }
-            
             print(f"🚌 [ASSIGN] Hoàn thành phân bổ cho {len(assignments)} xe")
+            
+            # Tạo message phù hợp
+            overwrite_message = ""
+            if datxe_assigned or chitiet_assigned:
+                overwrite_message = f" (đã ghi đè {len(datxe_assigned)} đặt xe + {len(chitiet_assigned)} chi tiết cũ)"
             
             return Response({
                 'success': True,
-                'message': f'Đã phân bổ {len(passengers)} hành khách cho {len(assignments)} tài xế',
+                'message': f'Đã phân bổ {len(passengers)} hành khách cho {len(assignments)} tài xế{overwrite_message}',
                 'ca_id': ca_id,
                 'total_passengers': len(passengers),
                 'total_seats_needed': total_seats_needed,
                 'total_capacity': total_capacity,
+                'overwrite_info': {
+                    'had_previous_assignment': len(datxe_assigned) > 0 or len(chitiet_assigned) > 0,
+                    'overwritten_bookings': len(datxe_assigned),
+                    'overwritten_details': len(chitiet_assigned),
+                    'new_assignments': len(datxe_unassigned) + len(chitiet_unassigned)
+                },
                 'assignments': result
             })
             
