@@ -2,10 +2,11 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError, AccessToken
 from drf_spectacular.utils import extend_schema, OpenApiExample
 from .models import NguoiDung, Datxe, Chitietdatxe, Danhgia, Nhanvien, Tuyenduong, Ca, Chitietca
 from .serializers import UserSerializer, SignupSerializer, LoginSerializer, BookingSerializer, BookingDetailSerializer, CheckSlotInputSerializer, GetDirectionInputSerializer, GetDistrictInputSerializer, GetPriceInputSerializer, TuyenduongSerializer, HuyenSerializer, CaSerializer, ChitietcaSerializer
+from .models_access_blacklist import BlacklistedAccessToken
 import requests
 import urllib.parse
 
@@ -25,6 +26,9 @@ class SearchAddressInputSerializer(serializers.Serializer):
 class ReverseGeocodeInputSerializer(serializers.Serializer):
     lat = serializers.CharField(help_text="Vĩ độ")
     lon = serializers.CharField(help_text="Kinh độ")
+
+class LogoutInputSerializer(serializers.Serializer):
+    refresh = serializers.CharField(help_text="Refresh token cần thu hồi")
 
 class AuthViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
@@ -70,7 +74,7 @@ class AuthViewSet(viewsets.ViewSet):
 
     @extend_schema(
         description="Đăng xuất khỏi hệ thống, thu hồi refresh token.",
-        request=None,
+        request=LogoutInputSerializer,
         responses={205: OpenApiExample('Đăng xuất thành công', value={"detail": "Đăng xuất thành công."})},
         examples=[
             OpenApiExample(
@@ -83,6 +87,15 @@ class AuthViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'], url_path='logout', permission_classes=[IsAuthenticated])
     def logout(self, request):
         refresh_token = request.data.get("refresh")
+        # Blacklist access token
+        access_token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if access_token:
+            try:
+                token = AccessToken(access_token)
+                jti = token['jti']
+                BlacklistedAccessToken.objects.get_or_create(jti=jti)
+            except Exception:
+                pass
         if not refresh_token:
             return Response({"error": "Thiếu refresh token."}, status=status.HTTP_400_BAD_REQUEST)
         try:
