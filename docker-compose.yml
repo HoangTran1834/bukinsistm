@@ -1,0 +1,73 @@
+services:
+  valhalla:
+    image: ghcr.io/nilsnolde/docker-valhalla/valhalla:latest
+    container_name: valhalla_server
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./datxe_map/data:/custom_files
+    restart: unless-stopped
+    environment:
+      - force_rebuild=True
+
+  nominatim:
+    image: mediagis/nominatim:5.1
+    container_name: nominatim_server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./datxe_map/data:/nominatim/data
+    environment:
+      - PBF_PATH=/nominatim/data/tamky_danang_.osm.pbf
+    restart: unless-stopped
+    depends_on:
+      - valhalla
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_server
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: Abc123!@#
+      MYSQL_DATABASE: hethongdatxe
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./HeThongDatXe.sql:/docker-entrypoint-initdb.d/HeThongDatXe.sql:ro
+
+  backend:
+    build:
+      context: ./datxe_backend
+    container_name: datxe_backend
+    entrypoint: ["sh", "/app/entrypoint.sh"]
+    volumes:
+      - ./datxe_backend:/app
+      - ./HeThongDatXe.sql:/app/HeThongDatXe.sql:ro
+      - ./scripts:/scripts
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=datxe_backend.settings
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=hethongdatxe
+      - DB_USER=root
+      - DB_PASSWORD=Abc123!@#
+    depends_on:
+      - mysql
+
+  frontend:
+    build:
+      context: ./datxe_frontend
+    container_name: datxe_frontend
+    volumes:
+      - ./datxe_frontend:/app
+    ports:
+      - "5173:5173"
+    command: ["sh", "-c", "npm install && npm run dev -- --host"]
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:

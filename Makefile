@@ -17,7 +17,7 @@ run-ui:
 	cd datxe_frontend && npm install && npm run dev
 
 run-ser:
-	python manage.py runserver
+	PYTHONPATH=. python3 datxe_backend/manage.py runserver
 
 migrate:
 	python manage.py migrate
@@ -32,11 +32,10 @@ lint:
 	black . && isort .
 
 build:
-	docker-compose build
-	python scripts/hash_user_password.py
+	docker compose up -d valhalla nominatim
 
 up:
-	docker-compose up -d
+	docker-compose up -d valhalla nominatim
 
 down:
 	docker-compose down

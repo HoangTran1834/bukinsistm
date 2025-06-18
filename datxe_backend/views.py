@@ -6,6 +6,8 @@ from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from drf_spectacular.utils import extend_schema, OpenApiExample
 from .models import NguoiDung, Datxe, Chitietdatxe, Danhgia, Nhanvien, Tuyenduong, Ca, Chitietca
 from .serializers import UserSerializer, SignupSerializer, LoginSerializer, BookingSerializer, BookingDetailSerializer, CheckSlotInputSerializer, GetDirectionInputSerializer, GetDistrictInputSerializer, GetPriceInputSerializer, TuyenduongSerializer, HuyenSerializer, CaSerializer, ChitietcaSerializer
+import requests
+import urllib.parse
 
 """
 API ViewSets cho hệ thống đặt xe taxi:
@@ -16,6 +18,13 @@ API ViewSets cho hệ thống đặt xe taxi:
 
 Các API đều có mô tả chi tiết, ví dụ mẫu, hỗ trợ tốt cho thử nghiệm trên Swagger UI (drf-spectacular).
 """
+
+class SearchAddressInputSerializer(serializers.Serializer):
+    query = serializers.CharField(help_text="Địa chỉ cần tìm kiếm")
+
+class ReverseGeocodeInputSerializer(serializers.Serializer):
+    lat = serializers.CharField(help_text="Vĩ độ")
+    lon = serializers.CharField(help_text="Kinh độ")
 
 class AuthViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
@@ -349,134 +358,8 @@ class BookingViewSet(viewsets.ModelViewSet):
         except Chitietca.DoesNotExist:
             return Response({"error": "Không tìm thấy chi tiết ca."}, status=status.HTTP_404_NOT_FOUND)
 
-    @extend_schema(
-        description="Tính hướng di chuyển giữa hai địa điểm (theo địa chỉ hoặc mã địa điểm). Hiện tại trả về mặc định 1 (Đà Nẵng đi Tam Kỳ).",
-        request=GetDirectionInputSerializer,
-        responses={200: OpenApiExample('Kết quả', value={"huong": 1})},
-        examples=[
-            OpenApiExample(
-                'Tính hướng mẫu',
-                value={"diemdon": 1, "diemtra": 2},
-                request_only=True,
-            ),
-        ],
-    )
-    @action(detail=False, methods=['post'], url_path='get_direction', permission_classes=[IsAuthenticated])
-    def get_direction(self, request):
-        # Giả sử luôn trả về hướng 1 (Đà Nẵng đi Tam Kỳ)
-        return Response({"huong": 1})
-
-    @extend_schema(
-        description="Tính huyện của một địa chỉ (mã địa điểm). Hiện tại trả về tên huyện mẫu dựa trên mã địa điểm (1: Tam Kỳ, 2: Đà Nẵng, ...)",
-        request=GetDistrictInputSerializer,
-        responses={200: OpenApiExample('Kết quả', value={"huyen": "Tam Kỳ"})},
-        examples=[
-            OpenApiExample(
-                'Tính huyện mẫu',
-                value={"diemdon": 1},
-                request_only=True,
-            ),
-        ],
-    )
-    @action(detail=False, methods=['post'], url_path='get_district', permission_classes=[IsAuthenticated])
-    def get_district(self, request):
-        # Giả sử luôn trả về huyện Tam Kỳ (mã 1)
-        return Response({"huyen": "Tam Kỳ"})
-
-    @extend_schema(
-        description="Tính giá dự kiến cho một lộ trình (đã có mã tuyến đường). Chỉ cần nhập mã tuyến đường, API sẽ trả về giá dự kiến.",
-        request=GetPriceInputSerializer,
-        responses={200: OpenApiExample('Kết quả', value={"giatien": 30000})},
-        examples=[
-            OpenApiExample(
-                'Tính giá mẫu',
-                value={"matuyenduong": 1},
-                request_only=True,
-            ),
-        ],
-    )
-    @action(detail=False, methods=['post'], url_path='get_price', permission_classes=[IsAuthenticated])
-    def get_price(self, request):
-        matuyenduong = request.data.get('matuyenduong')
-        # Giả sử luôn trả về giá 30.000đ cho mã tuyến đường bất kỳ
-        return Response({"giatien": 30000})
-
-    @extend_schema(
-        description="Lấy danh sách các tài xế đang trực (online) theo ca. Chỉ admin mới xem được danh sách này.",
-        responses={200: UserSerializer(many=True)},
-        examples=[
-            OpenApiExample(
-                'Tài xế trực mẫu',
-                value=[
-                    {"maNguoiDung": 2, "hoTen": "Tran Thi B", "sodienthoai": "0987654321", "vaitro": "Tài xế", "trangthai": "Đang trực"}
-                ],
-                response_only=True,
-            ),
-        ],
-    )
-    @action(detail=False, methods=['get'], url_path='drivers_online', permission_classes=[IsAuthenticated])
-    def drivers_online(self, request):
-        from django.utils import timezone
-        from datetime import timedelta
-        # Lấy thời gian hiện tại trừ đi 30 phút
-        time_threshold = timezone.now() - timedelta(minutes=30)
-        # Tìm các tài xế có trạng thái "Đang trực" và có ca trong vòng 30 phút qua
-        online_drivers = NguoiDung.objects.filter(
-            vaitro="Tài xế",
-            trangthai="Đang trực",
-            cataixe__batdau__gte=time_threshold
-        ).distinct()
-        serializer = self.get_serializer(online_drivers, many=True)
-        return Response(serializer.data)
-
-    @extend_schema(
-        description="Lấy danh sách các ca tài xế theo ngày. Chỉ admin mới xem được danh sách này.",
-        responses={200: CaSerializer(many=True)},
-        examples=[
-            OpenApiExample(
-                'Ca tài xế mẫu',
-                value=[
-                    {"maca": 1, "tenca": "Ca sáng", "batdau": "2023-10-01T06:00:00", "ketthuc": "2023-10-01T12:00:00", "trangthai": "Đang hoạt động"}
-                ],
-                response_only=True,
-            ),
-        ],
-    )
-    @action(detail=False, methods=['get'], url_path='shifts_by_date', permission_classes=[IsAuthenticated])
-    def shifts_by_date(self, request):
-        from django.utils import timezone
-        from datetime import timedelta
-        today = timezone.now().date()
-        shifts = Ca.objects.filter(ngayxuatphat=today).order_by('gioxuatphat')
-        serializer = CaSerializer(shifts, many=True)
-        return Response(serializer.data)
-
-    @extend_schema(
-        description="Lấy thống kê số lượng tài xế, hành khách, đặt xe theo thời gian (theo ngày).",
-        responses={200: OpenApiExample('Kết quả', value={"ngay": "2023-10-01", "soluongtaixe": 10, "soluonghanhkhach": 50, "soluongdatxe": 30})},
-        examples=[
-            OpenApiExample(
-                'Thống kê mẫu',
-                value={"tu_ngay": "2023-10-01", "den_ngay": "2023-10-31"},
-                request_only=True,
-            ),
-        ],
-    )
-    @action(detail=False, methods=['post'], url_path='statistics', permission_classes=[IsAuthenticated])
-    def statistics(self, request):
-        from django.db.models import Count
-        tu_ngay = request.data.get('tu_ngay')
-        den_ngay = request.data.get('den_ngay')
-        # Giả sử luôn trả về số liệu mẫu cho tháng 10 năm 2023
-        if tu_ngay == "2023-10-01" and den_ngay == "2023-10-31":
-            return Response({
-                "ngay": "2023-10-01",
-                "soluongtaixe": 10,
-                "soluonghanhkhach": 50,
-                "soluongdatxe": 30
-            })
-        # Nếu không phải khoảng thời gian mẫu, trả về rỗng
-        return Response([])
+class RouteViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         description="Lấy danh sách các tuyến đường (đã có mã tuyến đường). Chỉ admin mới xem được danh sách này.",
@@ -484,20 +367,17 @@ class BookingViewSet(viewsets.ModelViewSet):
         examples=[
             OpenApiExample(
                 'Tuyến đường mẫu',
-                value=[
-                    {"matuyenduong": 1, "tentuyenduong": "Đà Nẵng - Tam Kỳ", "giatien": 30000}
-                ],
+                value=[{"matuyenduong": 1, "tentuyenduong": "Đà Nẵng - Tam Kỳ", "giatien": 30000}],
                 response_only=True,
             ),
         ],
     )
-    @action(detail=False, methods=['get'], url_path='routes', permission_classes=[IsAuthenticated])
-    def routes(self, request):
-        # Chỉ admin mới xem được danh sách này
+    @action(detail=False, methods=['get'], url_path='routes')
+    def list_routes(self, request):
         if request.user.vaitro != 0:
             return Response({"error": "Chỉ admin mới có quyền truy cập."}, status=status.HTTP_403_FORBIDDEN)
         routes = Tuyenduong.objects.all()
-        serializer = self.get_serializer(routes, many=True)
+        serializer = TuyenduongSerializer(routes, many=True)
         return Response(serializer.data)
 
     @extend_schema(
@@ -512,9 +392,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             ),
         ],
     )
-    @action(detail=False, methods=['post'], url_path='routes', permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], url_path='routes/create')
     def create_route(self, request):
-        # Chỉ admin mới có quyền thêm tuyến đường
         if request.user.vaitro != 0:
             return Response({"error": "Chỉ admin mới có quyền này."}, status=status.HTTP_403_FORBIDDEN)
         serializer = TuyenduongSerializer(data=request.data)
@@ -534,9 +413,8 @@ class BookingViewSet(viewsets.ModelViewSet):
             ),
         ],
     )
-    @action(detail=False, methods=['put'], url_path='routes', permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['put'], url_path='routes/update')
     def update_route(self, request):
-        # Chỉ admin mới có quyền sửa tuyến đường
         if request.user.vaitro != 0:
             return Response({"error": "Chỉ admin mới có quyền này."}, status=status.HTTP_403_FORBIDDEN)
         instance = Tuyenduong.objects.get(matuyenduong=request.data.get("matuyenduong"))
@@ -556,14 +434,108 @@ class BookingViewSet(viewsets.ModelViewSet):
             ),
         ],
     )
-    @action(detail=False, methods=['delete'], url_path='routes', permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['delete'], url_path='routes/delete')
     def delete_route(self, request):
-        # Chỉ admin mới có quyền xóa tuyến đường
         if request.user.vaitro != 0:
             return Response({"error": "Chỉ admin mới có quyền này."}, status=status.HTTP_403_FORBIDDEN)
         instance = Tuyenduong.objects.get(matuyenduong=request.data.get("matuyenduong"))
         instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @extend_schema(
+        description="Tính giá dự kiến cho một lộ trình (đã có mã tuyến đường). Chỉ cần nhập mã tuyến đường, API sẽ trả về giá dự kiến.",
+        request=GetPriceInputSerializer,
+        responses={200: OpenApiExample('Kết quả', value={"giatien": 30000})},
+        examples=[
+            OpenApiExample(
+                'Tính giá mẫu',
+                value={"matuyenduong": 1},
+                request_only=True,
+            ),
+        ],
+    )
+    @action(detail=False, methods=['post'], url_path='get_price')
+    def get_price(self, request):
+        matuyenduong = request.data.get('matuyenduong')
+        return Response({"giatien": 30000})
 
+    @extend_schema(
+        description="Tính hướng di chuyển giữa hai địa điểm (theo địa chỉ hoặc mã địa điểm). Hiện tại trả về mặc định 1 (Đà Nẵng đi Tam Kỳ).",
+        request=GetDirectionInputSerializer,
+        responses={200: OpenApiExample('Kết quả', value={"huong": 1})},
+        examples=[
+            OpenApiExample(
+                'Tính hướng mẫu',
+                value={"diemdon": 1, "diemtra": 2},
+                request_only=True,
+            ),
+        ],
+    )
+    @action(detail=False, methods=['post'], url_path='get_direction')
+    def get_direction(self, request):
+        return Response({"huong": 1})
+
+    @extend_schema(
+        description="Tìm kiếm địa chỉ (geocoding) sử dụng Nominatim.",
+        request=SearchAddressInputSerializer,
+        responses={200: OpenApiExample('Kết quả', value=[{"display_name": "Địa chỉ mẫu", "lat": "16.05", "lon": "108.2"}])},
+        examples=[
+            OpenApiExample(
+                'Tìm kiếm địa chỉ mẫu',
+                value={"query": "Đà Nẵng"},
+                request_only=True,
+            ),
+        ],
+    )
+    @action(detail=False, methods=['post'], url_path='search_address')
+    def search_address_nominatim(self, request):
+        NOMINATIM_BASE_URL = "http://localhost:8080"
+        query = request.data.get('query')
+        if not query:
+            return Response({"error": "Thiếu tham số query"}, status=status.HTTP_400_BAD_REQUEST)
+        endpoint = f"{NOMINATIM_BASE_URL}/search"
+        params = {
+            "q": query,
+            "format": "json"
+        }
+        try:
+            response = requests.get(endpoint, params=params, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            return Response(data)
+        except requests.exceptions.RequestException as e:
+            return Response({"error": f"Lỗi khi gọi API Geocoding: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+    @extend_schema(
+        description="Reverse geocoding (tìm địa chỉ từ lat/lon) sử dụng Nominatim.",
+        request=ReverseGeocodeInputSerializer,
+        responses={200: OpenApiExample('Kết quả', value={"display_name": "Địa chỉ mẫu", "address": {}})},
+        examples=[
+            OpenApiExample(
+                'Reverse geocoding mẫu',
+                value={"lat": "16.05", "lon": "108.2"},
+                request_only=True,
+            ),
+        ],
+    )
+    @action(detail=False, methods=['post'], url_path='reverse_geocode')
+    def reverse_geocode_nominatim(self, request):
+        NOMINATIM_BASE_URL = "http://localhost:8080"
+        lat = request.data.get('lat')
+        lon = request.data.get('lon')
+        if not lat or not lon:
+            return Response({"error": "Thiếu tham số lat hoặc lon"}, status=status.HTTP_400_BAD_REQUEST)
+        endpoint = f"{NOMINATIM_BASE_URL}/reverse"
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "format": "json"
+        }
+        try:
+            response = requests.get(endpoint, params=params, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            return Response(data)
+        except requests.exceptions.RequestException as e:
+            return Response({"error": f"Lỗi khi gọi API Reverse Geocoding: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
 
