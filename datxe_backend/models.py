@@ -148,7 +148,8 @@ class Chitietca(models.Model):
 class Datxe(models.Model):
     madatxe = models.AutoField(db_column='maDatXe', primary_key=True)
     manguoidung = models.ForeignKey('NguoiDung', models.DO_NOTHING, db_column='maNguoiDung')
-    thoigiandat = models.DateTimeField(db_column='thoiGianDat')
+    maca = models.ForeignKey('Ca', models.DO_NOTHING, db_column='maCa')  # thêm mã ca (not null)
+    thoigiandat = models.DateTimeField(db_column='thoiGianDat', blank=True, null=True, auto_now_add=True)  # tự động set khi tạo
     manhanvien = models.ForeignKey('Nhanvien', models.DO_NOTHING, db_column='maNhanVien', blank=True, null=True)
     machitietca = models.ForeignKey('Chitietca', models.DO_NOTHING, db_column='maChiTietCa', blank=True, null=True) # nullable
     diemtra = models.ForeignKey('Diadiem', models.DO_NOTHING, db_column='diemTra')

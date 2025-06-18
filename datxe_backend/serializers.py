@@ -123,6 +123,7 @@ class BookingSerializer(serializers.ModelSerializer):
     chitietdatxe = BookingDetailSerializer(many=True, read_only=True, source='chitietdatxe_set')
     diemdon = DiadiemSerializer(read_only=True)
     diemtra = DiadiemSerializer(read_only=True)
+    maca = CaSerializer(read_only=True)  # thêm thông tin ca
     machitietca = ChitietcaSerializer(read_only=True)
     manguoidung = UserSerializer(read_only=True)
     class Meta:
@@ -134,7 +135,7 @@ class CreateBookingSerializer(serializers.ModelSerializer):
     chitietdatxe = ChitietdatxeInputSerializer(many=True, required=False)    
     class Meta:
         model = Datxe
-        fields = ['madatxe', 'diemdon', 'diemtra', 'soghe', 'ghichu', 'chitietdatxe']
+        fields = ['madatxe', 'maca', 'diemdon', 'diemtra', 'soghe', 'ghichu', 'chitietdatxe']
         read_only_fields = ['madatxe']
         # Loại bỏ machitietca và matuyenduong - sẽ được tự động gán
 
@@ -185,9 +186,8 @@ class CreateBookingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Tuyến đường không tồn tại.")
         except Exception as e:
             print(f"🔧 [BOOKING] Lỗi trong quá trình tìm tuyến đường: {str(e)}")
-            raise serializers.ValidationError(f"Lỗi khi tìm tuyến đường: {str(e)}")
-        
-        # Tạo booking với user hiện tại, tự động gán trạng thái "Đã đặt"
+            raise serializers.ValidationError(f"Lỗi khi tìm tuyến đường: {str(e)}")        # Tạo booking với user hiện tại, tự động gán trạng thái "Đã đặt"
+        # thoigiandat tự động set khi tạo booking
         from django.utils import timezone
         booking = Datxe.objects.create(
             manguoidung=self.context['request'].user,
@@ -317,3 +317,15 @@ class GetHuyenOutputSerializer(serializers.Serializer):
     matched_keyword = serializers.CharField(required=False)
     method = serializers.CharField(required=False)
     nominatim_data = serializers.JSONField(required=False)
+
+class GetCaByDateInputSerializer(serializers.Serializer):
+    """Serializer cho input API lấy ca theo ngày"""
+    ngay = serializers.DateField(help_text="Ngày cần tìm ca (format: YYYY-MM-DD)")
+    huyen_xuatphat = serializers.IntegerField(
+        required=False, 
+        help_text="Mã huyện xuất phát (1=Tam Kỳ, 2=Đà Nẵng). Bỏ trống để lấy tất cả"
+    )
+
+class AssignDriverInputSerializer(serializers.Serializer):
+    """Serializer cho input API phân bổ tài xế cho ca"""
+    ca_id = serializers.IntegerField(help_text="Mã ca cần phân bổ tài xế")
