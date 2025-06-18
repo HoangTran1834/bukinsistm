@@ -84,7 +84,7 @@ interface LoginData {
   password: string;
 }
 
-interface LoginResponse {
+export interface LoginResponse {
   access: string;
   refresh: string;
   user: any;

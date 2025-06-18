@@ -1,12 +1,17 @@
 import {
   createContext,
-  type ReactNode,
   useContext,
   useEffect,
   useState,
+  type ReactNode,
 } from "react";
 import { type UserRole } from "../constants/roles";
-import { authAPI, tokenUtils, userAPI } from "../services/api";
+import {
+  authAPI,
+  tokenUtils,
+  userAPI,
+  type LoginResponse,
+} from "../services/api";
 
 // Types
 interface User {
@@ -21,7 +26,10 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (sodienthoai: string, password: string) => Promise<void>;
+  login: (
+    sodienthoai: string,
+    password: string
+  ) => Promise<LoginResponse | void>;
   logout: () => Promise<void>;
   signup: (userData: {
     hoten: string;
