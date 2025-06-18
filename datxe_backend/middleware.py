@@ -8,8 +8,22 @@ logger = logging.getLogger("django")
 class AccessTokenBlacklistMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
+        # Danh sách các endpoint được miễn kiểm tra blacklist
+        self.exempt_paths = [
+            '/api/auth/login/',
+            '/api/auth/signup/',
+            '/api/auth/reset-password/',
+            '/api/schema/',
+            '/api/docs/',
+            '/api/redoc/',
+        ]
 
     def __call__(self, request):
+        # Kiểm tra nếu path hiện tại được miễn kiểm tra
+        if any(request.path.startswith(path) for path in self.exempt_paths):
+            logger.info(f"[BlacklistMiddleware] Path {request.path} is exempt from blacklist check")
+            return self.get_response(request)
+            
         auth = request.headers.get('Authorization', '')
         logger.info(f"[BlacklistMiddleware] Authorization header: {auth}")
         if auth.startswith('Bearer '):

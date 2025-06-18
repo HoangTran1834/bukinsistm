@@ -104,7 +104,7 @@ SIMPLE_JWT = {
     'USER_ID_FIELD': 'manguoidung',
     'BLACKLIST_AFTER_ROTATION': True,
     'ROTATE_REFRESH_TOKENS': True,
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),  # 2 tiếng
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=4),  # 2 tiếng
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # 7 ngày
 }
 
@@ -112,6 +112,9 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
@@ -160,9 +163,17 @@ TEST = 'test' in sys.argv[0]
 TESTING = TEST
 
 SPECTACULAR_SETTINGS = {
+    "TITLE": "Hệ thống đặt xe taxi API",
+    "DESCRIPTION": "API cho hệ thống đặt xe taxi với các chức năng đăng ký, đăng nhập, đặt xe, quản lý tuyến đường",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
     "SWAGGER_UI_SETTINGS": {
         "persistAuthorization": True,
         "displayOperationId": True,
+        "deepLinking": True,
+        "displayRequestDuration": True,
+        "tryItOutEnabled": True,
     },
     "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": "/api/",
 }
