@@ -55,15 +55,16 @@ CREATE TABLE `TaiXe` (
 CREATE TABLE `DatXe` (
     `maDatXe` INT NOT NULL AUTO_INCREMENT,
     `maNguoiDung` INT NOT NULL,
-    `thoiGianDat` DATETIME NOT NULL,
+    `maCa` INT NOT NULL, -- mã ca để xác định giờ xuất phát và hướng di chuyển
+    `thoiGianDat` DATETIME NULL DEFAULT CURRENT_TIMESTAMP, -- tự động set khi tạo booking
     `maNhanVien` INT,
-    `maCa` INT NOT NULL,
+    `maChiTietCa` INT NULL, -- đổi sang mã chi tiết ca, nullable
     `diemTra` INT NOT NULL,
     `diemDon` INT NOT NULL,
-    `maTuyenDuong` INT NOT NULL,
+    `maTuyenDuong` INT NULL, -- nullable để bổ sung sau
     `trangThai` VARCHAR(50) NOT NULL,
     `ghiChu` TEXT,
-    `yeuCauChungXe` BOOLEAN NOT NULL,
+    `soGhe` INT NOT NULL DEFAULT 1, -- thêm số ghế
     PRIMARY KEY (`maDatXe`)
 );
 
@@ -110,28 +111,30 @@ CREATE TABLE `TuyenDuong` (
     `huyenDon` INT NOT NULL,
     `huyenTra` INT NOT NULL,
     `giaCuoc` DECIMAL(10, 2) NOT NULL,
+    `huongChay` INT NOT NULL DEFAULT 1 COMMENT '1: Đà Nẵng đi Tam Kỳ, 2: Tam Kỳ đi Đà Nẵng',
     PRIMARY KEY (`maTuyenDuong`)
 );
 
 CREATE TABLE `ChiTietDatXe` (
     `maChiTiet` INT NOT NULL AUTO_INCREMENT,
     `maDatXe` INT NOT NULL,
-    `maCa` INT NOT NULL,
+    `maChiTietCa` INT NULL, -- đổi sang mã chi tiết ca, nullable
     `tenKhach` VARCHAR(50) NOT NULL,
     `soDienThoaiKhach` VARCHAR(20) NOT NULL,
     `diemTra` INT NOT NULL,
     `diemDon` INT NOT NULL,
-    `maTuyenDuong` INT NOT NULL,
+    `maTuyenDuong` INT NULL, -- nullable để bổ sung sau
     `trangThai` VARCHAR(50) NOT NULL,
     `ghiChu` TEXT,
+    `soGhe` INT NOT NULL DEFAULT 1, -- thêm số ghế
     PRIMARY KEY (`maChiTiet`)
 );
 
 CREATE TABLE `DiaDiem` (
-	`maDiaDiem` INTEGER NOT NULL,
+	`maDiaDiem` INT NOT NULL AUTO_INCREMENT,
 	`tenDiaDiem` VARCHAR(255) NOT NULL,
-	`viDo` INTEGER NOT NULL,
-	`kinhDo` INTEGER NOT NULL,
+	`viDo` FLOAT NOT NULL,
+	`kinhDo` FLOAT NOT NULL,
 	PRIMARY KEY (`maDiaDiem`)
 );
 
@@ -142,12 +145,13 @@ ALTER TABLE `TaiXe` ADD FOREIGN KEY (`maTaiXe`) REFERENCES `NguoiDung`(`maNguoiD
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`maNhanVien`) REFERENCES `NhanVien`(`maNhanVien`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`maNguoiDung`) REFERENCES `NguoiDung`(`maNguoiDung`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`maCa`) REFERENCES `Ca`(`maCa`);
+ALTER TABLE `DatXe` ADD FOREIGN KEY (`maChiTietCa`) REFERENCES `ChiTietCa`(`maChiTietCa`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`maTuyenDuong`) REFERENCES `TuyenDuong`(`maTuyenDuong`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`diemDon`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`diemTra`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `DanhGia` ADD FOREIGN KEY (`maDatXe`) REFERENCES `DatXe`(`maDatXe`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maDatXe`) REFERENCES `DatXe`(`maDatXe`);
-ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maCa`) REFERENCES `Ca`(`maCa`);
+ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maChiTietCa`) REFERENCES `ChiTietCa`(`maChiTietCa`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maTuyenDuong`) REFERENCES `TuyenDuong`(`maTuyenDuong`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`diemTra`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`diemDon`) REFERENCES `DiaDiem`(`maDiaDiem`);
@@ -322,27 +326,27 @@ INSERT INTO Huyen (tenHuyen) VALUES
 ('Điện Bàn'); -- 5
 
 -- Insert tuyến đường sau khi đã có huyện
-INSERT INTO TuyenDuong (huyenDon, huyenTra, giaCuoc) VALUES
-(1, 2, 100000),
-(2, 3, 80000),
-(1, 3, 40000),
-(3, 1, 40000),
-(3, 2, 60000),
-(2, 1, 100000),
-(2, 4, 70000),
-(4, 2, 70000),
-(1, 4, 60000),
-(4, 1, 60000),
-(3, 4, 30000),
-(4, 3, 30000),
-(2, 5, 20000),
-(5, 2, 20000),
-(1, 5, 90000),
-(5, 1, 90000),
-(3, 5, 50000),
-(5, 3, 50000),
-(4, 5, 40000),
-(5, 4, 40000);
+INSERT INTO TuyenDuong (huyenDon, huyenTra, giaCuoc, huongChay) VALUES
+(1, 2, 100000, 2), -- Tam Kỳ đi Đà Nẵng
+(2, 3, 80000, 1), -- Đà Nẵng đi Thăng Bình
+(1, 3, 40000, 2), -- Tam Kỳ đi Thăng Bình
+(3, 1, 40000, 1), -- Thăng Bình đi Tam Kỳ
+(3, 2, 60000, 1), -- Thăng Bình đi Đà Nẵng
+(2, 1, 100000, 1), -- Đà Nẵng đi Tam Kỳ
+(2, 4, 70000, 1), -- Đà Nẵng đi Quế Sơn
+(4, 2, 70000, 2), -- Quế Sơn đi Đà Nẵng
+(1, 4, 60000, 2), -- Tam Kỳ đi Quế Sơn
+(4, 1, 60000, 1), -- Quế Sơn đi Tam Kỳ
+(3, 4, 30000, 2), -- Thăng Bình đi Quế Sơn
+(4, 3, 30000, 1), -- Quế Sơn đi Thăng Bình
+(2, 5, 20000, 1), -- Đà Nẵng đi Điện Bàn
+(5, 2, 20000, 2), -- Điện Bàn đi Đà Nẵng
+(1, 5, 90000, 2), -- Tam Kỳ đi Điện Bàn
+(5, 1, 90000, 1), -- Điện Bàn đi Tam Kỳ
+(3, 5, 50000, 1), -- Thăng Bình đi Điện Bàn
+(5, 3, 50000, 2), -- Điện Bàn đi Thăng Bình
+(4, 5, 40000, 1), -- Quế Sơn đi Điện Bàn
+(5, 4, 40000, 2); -- Điện Bàn đi Quế Sơn
 
 -- Insert Ca trước, sau đó insert ChiTietCa dựa trên mã Ca vừa tạo
 INSERT INTO Ca (gioXuatPhat, ngayXuatPhat, maHuyenXuatPhat) VALUES
@@ -405,47 +409,47 @@ INSERT INTO ChiTietCa (maCa, maXe, maTaiXe) VALUES
 (21, 1, 8), (21, 2, 9), (21, 3, 3), (21, 4, 4), (21, 5, 5), (21, 6, 6),
 (22, 1, 2), (22, 2, 7), (22, 3, 8), (22, 4, 9), (22, 5, 3), (22, 6, 4);
 
--- Thêm dữ liệu địa điểm mẫu để đảm bảo các foreign key cho DatXe và ChiTietDatXe
-INSERT INTO DiaDiem (maDiaDiem, tenDiaDiem, viDo, kinhDo) VALUES
-(1, '123 Lê Lợi, Tam Kỳ', 0, 0),
-(2, '45 Nguyễn Văn Linh, Đà Nẵng', 0, 0),
-(3, '12 Trần Phú, Thăng Bình', 0, 0),
-(4, '88 Hùng Vương, Quế Sơn', 0, 0),
-(5, '99 Lý Thường Kiệt, Điện Bàn', 0, 0);
+-- Thêm dữ liệu địa điểm mẫu với tọa độ thực tế (float)
+INSERT INTO DiaDiem (tenDiaDiem, viDo, kinhDo) VALUES
+('123 Lê Lợi, Tam Kỳ', 15.5700, 108.4800),
+('45 Nguyễn Văn Linh, Đà Nẵng', 16.0544, 108.2022),
+('12 Trần Phú, Thăng Bình', 15.6000, 108.4500),
+('88 Hùng Vương, Quế Sơn', 15.5500, 108.5000),
+('99 Lý Thường Kiệt, Điện Bàn', 15.9800, 108.2500);
 
--- Thêm dữ liệu đặt xe
-INSERT INTO DatXe (maNguoiDung, thoiGianDat, maNhanVien, maCa, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu, yeuCauChungXe) VALUES
-(12, '2024-05-01 10:00:00', 10, 1, 2, 1, 1, 'Đã xác nhận', 'Khách cần ghế trẻ em', 0),
-(13, '2024-05-01 11:00:00', 11, 2, 1, 2, 2, 'Đã xác nhận', '', 1),
-(14, '2024-05-01 12:00:00', 10, 3, 2, 1, 1, 'Chờ xác nhận', '', 0),
-(15, '2024-05-01 13:00:00', 11, 4, 1, 2, 2, 'Đã hủy', 'Khách hủy do thay đổi lịch', 0),
-(16, '2024-05-01 14:00:00', 10, 5, 2, 1, 1, 'Đã xác nhận', '', 1),
-(17, '2024-05-01 15:00:00', 10, 6, 2, 1, 1, 'Đã xác nhận', '', 0);
+-- -- Thêm dữ liệu đặt xe
+-- INSERT INTO DatXe (maNguoiDung, thoiGianDat, maNhanVien, maChiTietCa, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu, soGhe) VALUES
+-- (12, '2024-05-01 10:00:00', 10, 1, 2, 1, 1, 'Đã xác nhận', 'Khách cần ghế trẻ em', 0),
+-- (13, '2024-05-01 11:00:00', 11, 2, 1, 2, 2, 'Đã xác nhận', '', 1),
+-- (14, '2024-05-01 12:00:00', 10, 3, 2, 1, 1, 'Chờ xác nhận', '', 0),
+-- (15, '2024-05-01 13:00:00', 11, 4, 1, 2, 2, 'Đã hủy', 'Khách hủy do thay đổi lịch', 0),
+-- (16, '2024-05-01 14:00:00', 10, 5, 2, 1, 1, 'Đã xác nhận', '', 1),
+-- (17, '2024-05-01 15:00:00', 10, 6, 2, 1, 1, 'Đã xác nhận', '', 0);
 
--- Thêm dữ liệu chi tiết đặt xe
--- Đặt xe 1: 1 chi tiết
-INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
-(1, 1, 'Nguyễn Văn An', '0912345678', 2, 1, 1, 'Đã xác nhận', '');
+-- -- Thêm dữ liệu chi tiết đặt xe
+-- -- Đặt xe 1: 1 chi tiết
+-- INSERT INTO ChiTietDatXe (maDatXe, maChiTietCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+-- (1, 1, 'Nguyễn Văn An', '0912345678', 2, 1, 1, 'Đã xác nhận', '');
 
--- Đặt xe 2: 2 chi tiết
-INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
-(2, 2, 'Phạm Minh Đức', '0933123456', 1, 2, 2, 'Đã xác nhận', 'Yêu cầu xe rộng'),
-(2, 2, 'Nguyễn Thị Lan', '0977000005', 1, 2, 2, 'Đã xác nhận', '');
+-- -- Đặt xe 2: 2 chi tiết
+-- INSERT INTO ChiTietDatXe (maDatXe, maChiTietCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+-- (2, 2, 'Phạm Minh Đức', '0933123456', 1, 2, 2, 'Đã xác nhận', 'Yêu cầu xe rộng'),
+-- (2, 2, 'Nguyễn Thị Lan', '0977000005', 1, 2, 2, 'Đã xác nhận', '');
 
--- Đặt xe 3: 1 chi tiết
-INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
-(3, 3, 'Hoàng Thị Em', '0944987654', 2, 1, 1, 'Chờ xác nhận', '');
+-- -- Đặt xe 3: 1 chi tiết
+-- INSERT INTO ChiTietDatXe (maDatXe, maChiTietCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+-- (3, 3, 'Hoàng Thị Em', '0944987654', 2, 1, 1, 'Chờ xác nhận', '');
 
--- Đặt xe 4: 2 chi tiết
-INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
-(4, 4, 'Đặng Văn Phúc', '0967894321', 1, 2, 2, 'Đã hủy', 'Khách hủy'),
-(4, 4, 'Lê Thị Thu', '0911000003', 1, 2, 2, 'Đã hủy', '');
+-- -- Đặt xe 4: 2 chi tiết
+-- INSERT INTO ChiTietDatXe (maDatXe, maChiTietCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+-- (4, 4, 'Đặng Văn Phúc', '0967894321', 1, 2, 2, 'Đã hủy', 'Khách hủy'),
+-- (4, 4, 'Lê Thị Thu', '0911000003', 1, 2, 2, 'Đã hủy', '');
 
--- Đặt xe 5: 1 chi tiết
-INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
-(5, 5, 'Vũ Minh Tuấn', '0933555777', 2, 1, 1, 'Đã xác nhận', '');
+-- -- Đặt xe 5: 1 chi tiết
+-- INSERT INTO ChiTietDatXe (maDatXe, maChiTietCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+-- (5, 5, 'Vũ Minh Tuấn', '0933555777', 2, 1, 1, 'Đã xác nhận', '');
 
--- Đặt xe 6: 2 chi tiết
-INSERT INTO ChiTietDatXe (maDatXe, maCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
-(6, 6, 'Lý Thị Hoa', '0922444666', 2, 1, 1, 'Đã xác nhận', ''),
-(6, 6, 'Trịnh Văn Sơn', '0911222333', 2, 1, 1, 'Đã xác nhận', '');
+-- -- Đặt xe 6: 2 chi tiết
+-- INSERT INTO ChiTietDatXe (maDatXe, maChiTietCa, tenKhach, soDienThoaiKhach, diemTra, diemDon, maTuyenDuong, trangThai, ghiChu) VALUES
+-- (6, 6, 'Lý Thị Hoa', '0922444666', 2, 1, 1, 'Đã xác nhận', ''),
+-- (6, 6, 'Trịnh Văn Sơn', '0911222333', 2, 1, 1, 'Đã xác nhận', '');

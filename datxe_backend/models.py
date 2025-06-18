@@ -102,10 +102,10 @@ class Xe(models.Model):
         db_table = 'Xe'
 
 class Diadiem(models.Model):
-    madiadiem = models.IntegerField(db_column='maDiaDiem', primary_key=True)
+    madiadiem = models.AutoField(db_column='maDiaDiem', primary_key=True)
     tendiadiem = models.CharField(db_column='tenDiaDiem', max_length=100)
-    vido = models.IntegerField(db_column='viDo')
-    kinhdo = models.IntegerField(db_column='kinhDo')
+    vido = models.FloatField(db_column='viDo')
+    kinhdo = models.FloatField(db_column='kinhDo')
 
     class Meta:
         managed = False
@@ -119,6 +119,7 @@ class Tuyenduong(models.Model):
     huyendon = models.ForeignKey('Huyen', models.DO_NOTHING, db_column='huyenDon', related_name='tuyenduong_huyendon_set')
     huyentra = models.ForeignKey('Huyen', models.DO_NOTHING, db_column='huyenTra', related_name='tuyenduong_huyentra_set')
     giacuoc = models.DecimalField(db_column='giaCuoc', max_digits=10, decimal_places=2)
+    huongchay = models.IntegerField(db_column='huongChay', default=1, help_text='1: Đà Nẵng đi Tam Kỳ, 2: Tam Kỳ đi Đà Nẵng')
 
     class Meta:
         managed = False
@@ -147,15 +148,16 @@ class Chitietca(models.Model):
 class Datxe(models.Model):
     madatxe = models.AutoField(db_column='maDatXe', primary_key=True)
     manguoidung = models.ForeignKey('NguoiDung', models.DO_NOTHING, db_column='maNguoiDung')
-    thoigiandat = models.DateTimeField(db_column='thoiGianDat')
+    maca = models.ForeignKey('Ca', models.DO_NOTHING, db_column='maCa')  # thêm mã ca (not null)
+    thoigiandat = models.DateTimeField(db_column='thoiGianDat', blank=True, null=True, auto_now_add=True)  # tự động set khi tạo
     manhanvien = models.ForeignKey('Nhanvien', models.DO_NOTHING, db_column='maNhanVien', blank=True, null=True)
-    machitietca = models.ForeignKey('Chitietca', models.DO_NOTHING, db_column='maChiTietCa')
+    machitietca = models.ForeignKey('Chitietca', models.DO_NOTHING, db_column='maChiTietCa', blank=True, null=True) # nullable
     diemtra = models.ForeignKey('Diadiem', models.DO_NOTHING, db_column='diemTra')
     diemdon = models.ForeignKey('Diadiem', models.DO_NOTHING, db_column='diemDon', related_name='datxe_diemdon_set')
-    matuyenduong = models.ForeignKey('Tuyenduong', models.DO_NOTHING, db_column='maTuyenDuong')
+    matuyenduong = models.ForeignKey('Tuyenduong', models.DO_NOTHING, db_column='maTuyenDuong', blank=True, null=True) # nullable
     trangthai = models.CharField(db_column='trangThai', max_length=50)
     ghichu = models.TextField(db_column='ghiChu', blank=True, null=True)
-    yeucauchungxe = models.IntegerField(db_column='yeuCauChungXe')
+    soghe = models.IntegerField(db_column='soGhe', default=1) # thêm số ghế
 
     class Meta:
         managed = False
@@ -164,14 +166,15 @@ class Datxe(models.Model):
 class Chitietdatxe(models.Model):
     machitiet = models.AutoField(db_column='maChiTiet', primary_key=True)
     madatxe = models.ForeignKey('Datxe', models.DO_NOTHING, db_column='maDatXe')
-    machitietca = models.ForeignKey('Chitietca', models.DO_NOTHING, db_column='maChiTietCa')
+    machitietca = models.ForeignKey('Chitietca', models.DO_NOTHING, db_column='maChiTietCa', blank=True, null=True) # nullable
     tenkhach = models.CharField(db_column='tenKhach', max_length=50)
     sodienthoaikhach = models.CharField(db_column='soDienThoaiKhach', max_length=20)
     diemtra = models.ForeignKey('Diadiem', models.DO_NOTHING, db_column='diemTra')
     diemdon = models.ForeignKey('Diadiem', models.DO_NOTHING, db_column='diemDon', related_name='chitietdatxe_diemdon_set')
-    matuyenduong = models.ForeignKey('Tuyenduong', models.DO_NOTHING, db_column='maTuyenDuong')
+    matuyenduong = models.ForeignKey('Tuyenduong', models.DO_NOTHING, db_column='maTuyenDuong', blank=True, null=True) # nullable
     trangthai = models.CharField(db_column='trangThai', max_length=50)
     ghichu = models.TextField(db_column='ghiChu', blank=True, null=True)
+    soghe = models.IntegerField(db_column='soGhe', default=1) # thêm số ghế
 
     class Meta:
         managed = False

@@ -17,7 +17,7 @@ run-ui:
 	cd datxe_frontend && npm install && npm run dev
 
 run-ser:
-	python manage.py runserver
+	PYTHONPATH=. python3 datxe_backend/manage.py runserver
 
 migrate:
 	python manage.py migrate
@@ -32,11 +32,10 @@ lint:
 	black . && isort .
 
 build:
-	docker-compose build
-	python scripts/hash_user_password.py
+	docker compose up -d valhalla nominatim
 
 up:
-	docker-compose up -d
+	docker-compose up -d valhalla nominatim
 
 down:
 	docker-compose down
@@ -68,11 +67,11 @@ hash-user-password:
 		user.set_password(user.password)
 		user.save()
 
-update-database:
-	mysql -u root -pAbc123!@# hethongdatxe < HeThongDatXe.sql 
-	python manage.py makemigrations datxe_backend
-	python manage.py migrate 
-	python scripts/hash_user_password.py
+update-db:
+	mysql -u root -pAbc123!@# hethongdatxe < datxe_backend/HeThongDatXe.sql
+	PYTHONPATH=. python3 datxe_backend/manage.py makemigrations datxe_backend
+	PYTHONPATH=. python3 datxe_backend/manage.py migrate
+	PYTHONPATH=. python3 scripts/hash_user_password.py
 
 test:
 	pytest tests/

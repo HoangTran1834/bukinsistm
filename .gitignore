@@ -173,3 +173,4 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+datxe_map/data
