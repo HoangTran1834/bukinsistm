@@ -1,3 +1,4 @@
+import React from "react";
 import {
   EnvironmentOutlined,
   MailOutlined,
@@ -8,7 +9,7 @@ import { Col, Divider, Layout, Row, Space, Typography } from "antd";
 const { Footer: AntFooter } = Layout;
 const { Title, Text, Link } = Typography;
 
-const Footer = () => {
+const Footer: React.FC = () => {
   return (
     <AntFooter
       style={{
@@ -18,41 +19,16 @@ const Footer = () => {
       }}
     >
       <Row gutter={[32, 32]}>
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={8}>
           <Title level={4} style={{ color: "white", marginBottom: 16 }}>
-            DatXe System
+            Hệ Thống Đặt Xe
           </Title>
           <Text style={{ color: "#ccc" }}>
-            Hệ thống đặt xe trực tuyến hàng đầu Việt Nam. Kết nối hành khách và
-            tài xế một cách nhanh chóng, an toàn.
+            Dịch vụ đặt xe chất lượng cao, tin cậy và nhanh chóng.
           </Text>
         </Col>
 
-        <Col xs={24} sm={12} md={6}>
-          <Title level={5} style={{ color: "white", marginBottom: 16 }}>
-            Dịch vụ
-          </Title>
-          <Space direction="vertical" size="small">
-            <Link style={{ color: "#ccc" }}>Đặt xe ngay</Link>
-            <Link style={{ color: "#ccc" }}>Đặt xe theo lịch</Link>
-            <Link style={{ color: "#ccc" }}>Thuê xe dài hạn</Link>
-            <Link style={{ color: "#ccc" }}>Dịch vụ giao hàng</Link>
-          </Space>
-        </Col>
-
-        <Col xs={24} sm={12} md={6}>
-          <Title level={5} style={{ color: "white", marginBottom: 16 }}>
-            Hỗ trợ
-          </Title>
-          <Space direction="vertical" size="small">
-            <Link style={{ color: "#ccc" }}>Trung tâm trợ giúp</Link>
-            <Link style={{ color: "#ccc" }}>Điều khoản sử dụng</Link>
-            <Link style={{ color: "#ccc" }}>Chính sách bảo mật</Link>
-            <Link style={{ color: "#ccc" }}>Câu hỏi thường gặp</Link>
-          </Space>
-        </Col>
-
-        <Col xs={24} sm={12} md={6}>
+        <Col xs={24} sm={12} md={8}>
           <Title level={5} style={{ color: "white", marginBottom: 16 }}>
             Liên hệ
           </Title>
@@ -71,14 +47,31 @@ const Footer = () => {
             </Space>
           </Space>
         </Col>
+
+        <Col xs={24} sm={12} md={8}>
+          <Title level={5} style={{ color: "white", marginBottom: 16 }}>
+            Theo dõi chúng tôi
+          </Title>
+          <Space direction="vertical" size="small">
+            <Link href="#" target="_blank" style={{ color: "#ccc" }}>
+              Facebook
+            </Link>
+            <Link href="#" target="_blank" style={{ color: "#ccc" }}>
+              Twitter
+            </Link>
+            <Link href="#" target="_blank" style={{ color: "#ccc" }}>
+              Instagram
+            </Link>
+          </Space>
+        </Col>
       </Row>
 
       <Divider style={{ borderColor: "#434343", margin: "32px 0 16px" }} />
 
-      <Row justify="space-between" align="middle">
+      <Row justify="space-between" align="middle" style={{ marginTop: 24 }}>
         <Col>
-          <Text style={{ color: "#8c8c8c" }}>
-            © 2024 DatXe System. All rights reserved.
+          <Text type="secondary" style={{ color: "#8c8c8c" }}>
+            © {new Date().getFullYear()} Hệ Thống Đặt Xe. All Rights Reserved.
           </Text>
         </Col>
         <Col>

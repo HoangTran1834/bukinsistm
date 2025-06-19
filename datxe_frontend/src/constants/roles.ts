@@ -1,43 +1,43 @@
 // User role constants that correspond to database values
-export const USER_ROLES = {
-  ADMIN: 0,
-  TAI_XE: 1,
-  NHAN_VIEN: 2,
-  HANH_KHACH: 3,
-} as const;
+export enum UserRole {
+  ADMIN = "Admin",
+  DRIVER = "Tài xế",
+  STAFF = "Nhân viên",
+  PASSENGER = "Hành khách"
+}
 
-// Type for user role values
-export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
-
-// Role names for display purposes
-export const ROLE_NAMES: Record<UserRole, string> = {
-  [USER_ROLES.ADMIN]: "Admin",
-  [USER_ROLES.TAI_XE]: "Tài xế",
-  [USER_ROLES.NHAN_VIEN]: "Nhân viên",
-  [USER_ROLES.HANH_KHACH]: "Hành khách",
+export const roleToNumber = {
+  [UserRole.ADMIN]: 0,
+  [UserRole.DRIVER]: 1,
+  [UserRole.STAFF]: 2,
+  [UserRole.PASSENGER]: 3
 };
 
-// Helper function to get role name by value
-export const getRoleName = (roleValue: UserRole): string => {
-  return ROLE_NAMES[roleValue] || "Không xác định";
+export const numberToRole = {
+  0: UserRole.ADMIN,
+  1: UserRole.DRIVER,
+  2: UserRole.STAFF,
+  3: UserRole.PASSENGER
 };
 
-// Helper function to check if user has admin privileges
-export const isAdmin = (roleValue: UserRole): boolean => {
-  return roleValue === USER_ROLES.ADMIN;
+export const isAdmin = (role: string): boolean => {
+  return role === UserRole.ADMIN;
 };
 
-// Helper function to check if user is nhan vien
-export const isNhanVien = (roleValue: UserRole): boolean => {
-  return roleValue === USER_ROLES.NHAN_VIEN;
+export const isStaff = (role: string): boolean => {
+  return role === UserRole.STAFF || role === UserRole.ADMIN;
 };
 
-// Helper function to check if user is tai xe
-export const isTaiXe = (roleValue: UserRole): boolean => {
-  return roleValue === USER_ROLES.TAI_XE;
+export const isDriver = (role: string): boolean => {
+  return role === UserRole.DRIVER;
+};
+
+export const isPassenger = (role: string): boolean => {
+  return role === UserRole.PASSENGER;
+};
 };
 
 // Helper function to check if user is hanh khach
 export const isHanhKhach = (roleValue: UserRole): boolean => {
-  return roleValue === USER_ROLES.HANH_KHACH;
+  return roleValue === UserRole.PASSENGER;
 };

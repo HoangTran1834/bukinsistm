@@ -1,119 +1,133 @@
-import { LockOutlined, PhoneOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
-import React from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/authContext";
+import React, { useState } from "react";
+import {
+  Form,
+  Input,
+  Button,
+  Typography,
+  Card,
+  Alert,
+  Spin,
+  Divider,
+} from "antd";
+import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { useAuth } from "@/contexts/AuthContext";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const { Title, Text } = Typography;
 
-interface LoginFormValues {
-  sodienthoai: string;
-  password: string;
-}
-
 const Login: React.FC = () => {
-  const [form] = Form.useForm();
-  const { login, isLoading, error } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const onFinish = async (values: LoginFormValues) => {
+  // Get the redirect path from state or default to homepage
+  const from = (location.state as any)?.from?.pathname || "/";
+
+  const onFinish = async (values: { username: string; password: string }) => {
     try {
-      await login(values.sodienthoai, values.password);
-      navigate("/dashboard");
-    } catch (err) {
-      console.error("Login failed:", err);
+      setLoading(true);
+      setError(null);
+      await login(values.username, values.password);
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      console.error("Login error:", err);
+      if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.response?.data?.details) {
+        setError(JSON.stringify(err.response.data.details));
+      } else {
+        setError("Đăng nhập thất bại. Vui lòng kiểm tra thông tin đăng nhập.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      }}
-    >
-      <Card
-        style={{
-          width: "100%",
-          maxWidth: 400,
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-          borderRadius: 8,
-        }}
-      >
-        <Space direction="vertical" size="large" style={{ width: "100%" }}>
-          <div style={{ textAlign: "center" }}>
-            <Title level={2} style={{ color: "#1890ff", marginBottom: 8 }}>
-              Đăng Nhập
-            </Title>
-            <Text type="secondary">Chào mừng bạn quay trở lại</Text>
-          </div>
+    <div style={{ maxWidth: 400, margin: "40px auto", padding: "0 16px" }}>
+      <Card bordered={false} style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+        <Title level={2} style={{ textAlign: "center", marginBottom: 24 }}>
+          Đăng nhập
+        </Title>
 
-          {error && <Alert message={error} type="error" showIcon closable />}
+        {error && (
+          <Alert
+            message={error}
+            type="error"
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
+        )}
 
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={onFinish}
-            autoComplete="off"
-            size="large"
+        <Form
+          name="login_form"
+          initialValues={{ remember: true }}
+          onFinish={onFinish}
+          layout="vertical"
+        >
+          <Form.Item
+            name="username"
+            rules={[
+              { required: true, message: "Vui lòng nhập số điện thoại!" },
+            ]}
           >
-            <Form.Item
-              name="sodienthoai"
-              label="Số điện thoại"
-              rules={[
-                { required: true, message: "Vui lòng nhập số điện thoại!" },
-                {
-                  pattern: /^[0-9]{10,11}$/,
-                  message: "Số điện thoại không hợp lệ!",
-                },
-              ]}
+            <Input
+              prefix={<UserOutlined />}
+              size="large"
+              placeholder="Số điện thoại"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="password"
+            rules={[{ required: true, message: "Vui lòng nhập mật khẩu!" }]}
+          >
+            <Input.Password
+              prefix={<LockOutlined />}
+              size="large"
+              placeholder="Mật khẩu"
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              type="primary"
+              htmlType="submit"
+              size="large"
+              block
+              loading={loading}
             >
-              <Input
-                prefix={<PhoneOutlined />}
-                placeholder="Nhập số điện thoại"
-                maxLength={11}
-              />
-            </Form.Item>
+              Đăng nhập
+            </Button>
+          </Form.Item>
+        </Form>
 
-            <Form.Item
-              name="password"
-              label="Mật khẩu"
-              rules={[
-                { required: true, message: "Vui lòng nhập mật khẩu!" },
-                { min: 6, message: "Mật khẩu phải có ít nhất 6 ký tự!" },
-              ]}
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="Nhập mật khẩu"
-              />
-            </Form.Item>
+        <Divider plain>
+          <Text type="secondary">Hoặc</Text>
+        </Divider>
 
-            <Form.Item>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={isLoading}
-                block
-                style={{ height: 45 }}
-              >
-                {isLoading ? "Đang đăng nhập..." : "Đăng Nhập"}
-              </Button>
-            </Form.Item>
-          </Form>
+        <div style={{ textAlign: "center" }}>
+          <Text>Chưa có tài khoản? </Text>
+          <Link to="/register">Đăng ký ngay</Link>
+        </div>
+      </Card>
 
-          <div style={{ textAlign: "center" }}>
-            <Text type="secondary">
-              Chưa có tài khoản?{" "}
-              <Link to="/register" style={{ color: "#1890ff" }}>
-                Đăng ký ngay
-              </Link>
-            </Text>
-          </div>
-        </Space>
+      <Card style={{ marginTop: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+        <Title level={5}>Tài khoản mẫu:</Title>
+        <div style={{ marginBottom: 8 }}>
+          <Text strong>Admin:</Text> admin / admin123
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <Text strong>Tài xế:</Text> 0977000001 / txpass1
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <Text strong>Nhân viên:</Text> 0909090909 / mypassword789
+        </div>
+        <div>
+          <Text strong>Hành khách:</Text> 0912345678 / password123
+        </div>
       </Card>
     </div>
   );

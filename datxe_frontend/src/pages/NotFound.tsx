@@ -1,23 +1,23 @@
-import { HomeOutlined } from "@ant-design/icons";
-import { Button, Result, Space, Typography } from "antd";
+import React from "react";
+import { Result, Button } from "antd";
 import { Link } from "react-router-dom";
 
-const { Text, Title } = Typography;
-
-const NotFoundPage = () => {
+const NotFound: React.FC = () => {
   return (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        background: "linear-gradient(to right, #f5f7fa, #c3cfe2)",
-      }}
-    >
-      <Result
-        status="404"
+    <Result
+      status="404"
+      title="404"
+      subTitle="Trang bạn tìm kiếm không tồn tại."
+      extra={
+        <Link to="/">
+          <Button type="primary">Về trang chủ</Button>
+        </Link>
+      }
+    />
+  );
+};
+
+export default NotFound;
         title={
           <Title level={1} style={{ fontSize: "4rem", marginBottom: "0" }}>
             404

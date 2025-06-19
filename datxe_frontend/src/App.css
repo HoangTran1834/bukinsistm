@@ -1,0 +1,66 @@
+/* Global styles */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* Card hover effect */
+.feature-card {
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Media queries for responsive design */
+@media (max-width: 768px) {
+  .mobile-menu-button {
+    display: block;
+  }
+
+  .desktop-menu {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-menu-button {
+    display: none;
+  }
+
+  .desktop-menu {
+    display: block;
+  }
+}
+
+/* Custom page styles */
+.hero-section {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url("/path-to-your-hero-image.jpg") center/cover no-repeat;
+  opacity: 0.1;
+}
+
+/* Form styles */
+.login-form,
+.register-form {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* Layout styles */
+.ant-layout-content {
+  background-color: #f0f2f5;
+}
