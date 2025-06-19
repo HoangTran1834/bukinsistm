@@ -1,4 +1,4 @@
-import React from "react";
+import React, { JSX } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { Layout, ConfigProvider } from "antd";
 import viVN from "antd/lib/locale/vi_VN";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/authContext";
 import Navbar from "./components/Layout/Navbar";
 import Footer from "./components/Layout/Footer";
 import Home from "./pages/Home";

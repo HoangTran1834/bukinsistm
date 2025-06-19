@@ -16,20 +16,17 @@ import {
   SafetyOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/authContext";
 
 const { Title, Text, Paragraph } = Typography;
 
 const Home: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Simulate loading data
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 500);
+    const timer = setTimeout(() => {}, 500);
 
     return () => clearTimeout(timer);
   }, []);
