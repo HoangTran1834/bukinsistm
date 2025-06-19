@@ -2,7 +2,7 @@ import { LockOutlined, PhoneOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/authContext";
 
 const { Title, Text } = Typography;
 
