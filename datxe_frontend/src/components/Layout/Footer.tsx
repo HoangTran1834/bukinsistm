@@ -21,7 +21,7 @@ const Footer: React.FC = () => {
       <Row gutter={[32, 32]}>
         <Col xs={24} sm={12} md={8}>
           <Title level={4} style={{ color: "white", marginBottom: 16 }}>
-            Hệ Thống Đặt Xe
+            Hệ thống đặt xe
           </Title>
           <Text style={{ color: "#ccc" }}>
             Dịch vụ đặt xe chất lượng cao, tin cậy và nhanh chóng.
@@ -35,7 +35,7 @@ const Footer: React.FC = () => {
           <Space direction="vertical" size="small">
             <Space>
               <PhoneOutlined style={{ color: "#1890ff" }} />
-              <Link style={{ color: "#ccc" }}>1900 1234</Link>
+              <Link style={{ color: "#ccc" }}>0934913033</Link>
             </Space>
             <Space>
               <MailOutlined style={{ color: "#1890ff" }} />
@@ -43,7 +43,7 @@ const Footer: React.FC = () => {
             </Space>
             <Space>
               <EnvironmentOutlined style={{ color: "#1890ff" }} />
-              <Text style={{ color: "#ccc" }}>Hà Nội, Việt Nam</Text>
+              <Text style={{ color: "#ccc" }}>Đà Nẵng, Việt Nam</Text>
             </Space>
           </Space>
         </Col>

@@ -8,6 +8,8 @@ class Huyen(models.Model):
     class Meta:
         managed = False
         db_table = 'Huyen'
+        verbose_name = 'Huyện'
+        verbose_name_plural = 'Quản lý Huyện'
     def __str__(self):
         return self.tenhuyen
 
@@ -18,6 +20,8 @@ class Vaitro(models.Model):
     class Meta:
         managed = False
         db_table = 'VaiTro'
+        verbose_name = 'Vai trò'
+        verbose_name_plural = 'Quản lý Vai trò'
         
     def __str__(self):
         return self.tenvaitro
@@ -60,14 +64,16 @@ class NguoiDung(AbstractBaseUser):
     REQUIRED_FIELDS = ['hoten']
     
     def has_perm(self, perm, obj=None):
-        return self.is_active and self.is_staff and self.vaitro_id == 0
-
+        return self.is_active and self.is_staff and self.vaitro_id == 0    
+    
     def has_module_perms(self, app_label):
         return self.is_active and self.is_staff and self.vaitro_id == 0
     
     class Meta:
         managed = False
         db_table = 'NguoiDung'
+        verbose_name = 'Người dùng'
+        verbose_name_plural = 'Quản lý Người dùng'
         
     def __str__(self):
         return self.hoten
@@ -103,14 +109,16 @@ class Xe(models.Model):
 
 class Diadiem(models.Model):
     madiadiem = models.AutoField(db_column='maDiaDiem', primary_key=True)
-    tendiadiem = models.CharField(db_column='tenDiaDiem', max_length=100)
+    tendiadiem = models.CharField(db_column='tenDiaDiem', max_length=255)
     vido = models.FloatField(db_column='viDo')
     kinhdo = models.FloatField(db_column='kinhDo')
 
     class Meta:
         managed = False
         db_table = 'DiaDiem'
-        
+        verbose_name = 'Địa điểm'
+        verbose_name_plural = 'Quản lý Địa điểm'
+
     def __str__(self):
         return self.tendiadiem
 

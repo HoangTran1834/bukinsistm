@@ -513,10 +513,59 @@ def delete_shift_schema():
 
 def create_shift_detail_schema():
     return {
-        "description": "Tạo chi tiết ca (gán tài xế và xe vào ca)",
+        "description": "Quản lý chi tiết ca (gán tài xế và xe vào ca). Hỗ trợ POST (tạo), GET (xem danh sách), DELETE (xóa chi tiết ca).",
         "request": CreateShiftDetailSerializer,
         "responses": {
+            200: {
+                "description": "GET - Danh sách chi tiết ca với thông tin đầy đủ về xe và tài xế",
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "example": "Tìm thấy 2 chi tiết ca"},
+                    "ca_info": {
+                        "type": "object",
+                        "properties": {
+                            "maca": {"type": "integer", "example": 1},
+                            "gioxuatphat": {"type": "string", "example": "06:00:00"},
+                            "ngayxuatphat": {"type": "string", "example": "2025-06-20"},
+                            "huyen_xuat_phat": {"type": "integer", "example": 1}
+                        }
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "machitietca": {"type": "integer", "example": 123},
+                                "maca": {"type": "integer", "example": 1},
+                                "xe_info": {
+                                    "type": "object",
+                                    "properties": {
+                                        "maxe": {"type": "integer", "example": 1},
+                                        "biensoxe": {"type": "string", "example": "43A-12345"},
+                                        "loaixe": {"type": "string", "example": "Sedan 4 chỗ"},
+                                        "sochongoi": {"type": "integer", "example": 4},
+                                        "bienso_color": {"type": "string", "example": "white"}
+                                    }
+                                },
+                                "taixe_info": {
+                                    "type": "object",
+                                    "properties": {
+                                        "mataixe": {"type": "integer", "example": 3},
+                                        "hoten": {"type": "string", "example": "Nguyễn Văn Hùng"},
+                                        "sodienthoai": {"type": "string", "example": "0977000001"},
+                                        "email": {"type": "string", "example": "hung@gmail.com"},
+                                        "cccd": {"type": "string", "example": "123456789012"},
+                                        "gplx": {"type": "string", "example": "B2-987654321"},
+                                        "trangthai": {"type": "boolean", "example": True}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             201: {
+                "description": "POST - Tạo chi tiết ca thành công",
                 "type": "object",
                 "properties": {
                     "message": {"type": "string", "example": "Tạo chi tiết ca thành công"},
@@ -524,15 +573,8 @@ def create_shift_detail_schema():
                         "type": "object",
                         "properties": {
                             "machitietca": {"type": "integer", "example": 123},
-                            "maca": {
-                                "type": "object",
-                                "properties": {
-                                    "maca": {"type": "integer", "example": 1},
-                                    "gioxuatphat": {"type": "string", "format": "time", "example": "06:00:00"},
-                                    "ngayxuatphat": {"type": "string", "format": "date", "example": "2025-06-20"}
-                                }
-                            },
-                            "maxe": {
+                            "maca": {"type": "integer", "example": 1},
+                            "xe_info": {
                                 "type": "object",
                                 "properties": {
                                     "maxe": {"type": "integer", "example": 1},
@@ -541,37 +583,35 @@ def create_shift_detail_schema():
                                     "sochongoi": {"type": "integer", "example": 4}
                                 }
                             },
-                            "mataixe": {
+                            "taixe_info": {
                                 "type": "object",
                                 "properties": {
                                     "mataixe": {"type": "integer", "example": 3},
                                     "hoten": {"type": "string", "example": "Nguyễn Văn Hùng"},
                                     "sodienthoai": {"type": "string", "example": "0977000001"},
                                     "cccd": {"type": "string", "example": "123456789012"},
-                                    "trangthai": {"type": "integer", "example": 1}
+                                    "gplx": {"type": "string", "example": "B2-987654321"},
+                                    "trangthai": {"type": "boolean", "example": True}
                                 }
                             }
                         }
                     }
                 }
-            },
-            400: {
-                "type": "object", 
-                "properties": {
-                    "error": {"type": "string", "example": "Cần cung cấp cả maxe và mataixe"}
-                }
             }
         },
         "examples": [
             OpenApiExample(
-                name='Gán tài xế và xe vào ca',
-                summary='Thêm tài xế và xe vào ca làm việc',
-                description='Gán tài xế Nguyễn Văn Hùng và xe 43A-12345 vào ca',
-                value={
-                    "maxe": 1,
-                    "mataixe": 3
-                },
+                name='Tạo chi tiết ca (POST)',
+                summary='Gán tài xế và xe vào ca',
+                description='Tạo chi tiết ca mới bằng cách gán tài xế và xe vào ca',
+                value={"maxe": 1, "mataixe": 3},
                 request_only=True,
+            ),
+            OpenApiExample(
+                name='Xóa chi tiết ca (DELETE)',
+                summary='Xóa chi tiết ca khỏi ca',
+                description='Xóa chi tiết ca (cần cung cấp chitietca_id)',
+                value={"chitietca_id": 123},                request_only=True,
             ),
         ],
     }

@@ -35,7 +35,6 @@ export const isDriver = (role: string): boolean => {
 export const isPassenger = (role: string): boolean => {
   return role === UserRole.PASSENGER;
 };
-};
 
 // Helper function to check if user is hanh khach
 export const isHanhKhach = (roleValue: UserRole): boolean => {

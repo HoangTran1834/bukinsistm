@@ -10,7 +10,7 @@ import {
   Divider,
 } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "../contexts/authContext";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const { Title, Text } = Typography;
@@ -106,27 +106,10 @@ const Login: React.FC = () => {
 
         <Divider plain>
           <Text type="secondary">Hoặc</Text>
-        </Divider>
-
+        </Divider>        
         <div style={{ textAlign: "center" }}>
           <Text>Chưa có tài khoản? </Text>
           <Link to="/register">Đăng ký ngay</Link>
-        </div>
-      </Card>
-
-      <Card style={{ marginTop: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-        <Title level={5}>Tài khoản mẫu:</Title>
-        <div style={{ marginBottom: 8 }}>
-          <Text strong>Admin:</Text> admin / admin123
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <Text strong>Tài xế:</Text> 0977000001 / txpass1
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <Text strong>Nhân viên:</Text> 0909090909 / mypassword789
-        </div>
-        <div>
-          <Text strong>Hành khách:</Text> 0912345678 / password123
         </div>
       </Card>
     </div>

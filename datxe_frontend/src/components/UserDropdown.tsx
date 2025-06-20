@@ -6,7 +6,7 @@ import {
   SettingOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "../contexts/authContext";
 import type { MenuProps } from "antd";
 
 const UserDropdown: React.FC = () => {
@@ -17,19 +17,12 @@ const UserDropdown: React.FC = () => {
     await logout();
     navigate("/login");
   };
-
   const items: MenuProps["items"] = [
     {
       key: "profile",
       label: "Hồ sơ cá nhân",
       icon: <UserOutlined />,
       onClick: () => navigate("/profile"),
-    },
-    {
-      key: "settings",
-      label: "Cài đặt tài khoản",
-      icon: <SettingOutlined />,
-      onClick: () => navigate("/settings"),
     },
     {
       type: "divider",
@@ -46,7 +39,7 @@ const UserDropdown: React.FC = () => {
     <Dropdown menu={{ items }} trigger={["click"]}>
       <Space style={{ cursor: "pointer" }}>
         <Avatar icon={<UserOutlined />} />
-        <span>{user?.hoTen || "Người dùng"}</span>
+        <span>{user?.hoten || "Người dùng"}</span>
       </Space>
     </Dropdown>
   );

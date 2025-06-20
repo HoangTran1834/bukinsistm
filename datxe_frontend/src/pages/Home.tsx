@@ -16,7 +16,7 @@ import {
   SafetyOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "../contexts/authContext";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -24,6 +24,10 @@ const Home: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+
+  // Hero section background image
+  // Bạn có thể thêm ảnh hero vào: /public/images/hero-banner.jpg
+  // Hoặc import: import heroBg from '@/assets/images/banners/hero.jpg';
 
   useEffect(() => {
     // Simulate loading data
@@ -239,7 +243,7 @@ const Home: React.FC = () => {
       {isAuthenticated && user && (
         <div style={{ maxWidth: 1200, margin: "60px auto", padding: "0 16px" }}>
           <Alert
-            message={`Xin chào, ${user.hoTen}!`}
+            message={`Xin chào, ${user.hoten}!`}
             description={
               <div>
                 <Paragraph>

@@ -2,9 +2,9 @@ import React from "react";
 import { Layout, Menu, Button, Drawer } from "antd";
 import { Link, useLocation } from "react-router-dom";
 import { MenuOutlined } from "@ant-design/icons";
-import { useAuth } from "@/contexts/AuthContext";
-import UserDropdown from "@/components/UserDropdown";
+import { useAuth } from "../../contexts/authContext";
 import { isAdmin, isStaff, isDriver } from "@/constants/roles";
+import UserDropdown from "../UserDropdown";
 
 const { Header } = Layout;
 
@@ -16,13 +16,9 @@ const Navbar: React.FC = () => {
   const toggleDrawer = () => {
     setVisible(!visible);
   };
-
   // Define menu items based on authentication status and user role
   const items = [
-    {
-      key: "/",
-      label: <Link to="/">Trang chủ</Link>,
-    },
+    // Logo đã làm link về trang chủ, không cần menu item "Trang chủ" nữa
   ];
 
   // Only show these items if user is authenticated
@@ -31,18 +27,25 @@ const Navbar: React.FC = () => {
     items.push({
       key: "/booking",
       label: <Link to="/booking">Đặt xe</Link>,
-    });
-
-    // Admin and staff can manage shifts
+    });    // Admin and staff can manage shifts
     if (isAdmin(user.vaitro) || isStaff(user.vaitro)) {
       items.push({
         key: "/shifts",
         label: <Link to="/shifts">Quản lý ca</Link>,
       });
-
+      
+      // Staff can book for customers
       items.push({
-        key: "/users",
-        label: <Link to="/users">Quản lý người dùng</Link>,
+        key: "/staff/booking",
+        label: <Link to="/staff/booking">Đặt vé cho khách</Link>,
+      });    }
+
+    // Only Admin can access Django Admin Panel
+    if (isAdmin(user.vaitro)) {
+      // Django Admin Panel - chỉ cho Admin
+      items.push({
+        key: "/admin-panel",
+        label: <a href={`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}/admin/`} target="_blank" rel="noopener noreferrer">Django Admin</a>,
       });
     }
 
@@ -54,11 +57,7 @@ const Navbar: React.FC = () => {
       });
     }
 
-    // All users can access their profile
-    items.push({
-      key: "/profile",
-      label: <Link to="/profile">Hồ sơ</Link>,
-    });
+    // Profile đã có trong UserDropdown, không cần duplicate ở menu
   }
 
   return (
@@ -79,48 +78,65 @@ const Navbar: React.FC = () => {
           justifyContent: "space-between",
           alignItems: "center",
         }}
-      >
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <Link to="/" style={{ display: "flex", alignItems: "center" }}>
-            <h1 style={{ margin: 0, fontSize: "20px", marginRight: "20px" }}>
-              Hệ Thống Đặt Xe
-            </h1>
-          </Link>
-
-          {/* Desktop Menu */}
-          <div
+      >        
+      <div style={{ display: "flex", alignItems: "center" }}>
+          <Link to="/" style={{ display: "flex", alignItems: "center" }}>            {/* Logo - click để về trang chủ */}
+            <div style={{
+              backgroundColor: "white",
+              borderRadius: "4px",
+              padding: "4px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}>
+              <img 
+                src="/images/home.png"
+                alt="Hệ Thống Đặt Xe" 
+                style={{ 
+                  height: "45px", 
+                  objectFit: "contain",
+                  cursor: "pointer",                  // Thử loại bỏ nền xám bằng filter mạnh hơn
+                  filter: "brightness(1.5) contrast(1.3) saturate(1.2) hue-rotate(0deg)"
+                }} 
+              />
+            </div>
+          </Link>          {/* Desktop Menu - Hiển thị đầy đủ trên màn hình lớn */}
+          <div 
             className="desktop-menu"
             style={{
-              display: "none",
-              "@media (min-width: 768px)": { display: "block" },
+              display: "flex",
+              alignItems: "center", // Căn giữa theo chiều dọc
+              marginLeft: "20px",
+              gap: "20px",
+              height: "64px" // Cùng chiều cao với Header
             }}
-          >
-            <Menu
-              theme="light"
-              mode="horizontal"
-              selectedKeys={[location.pathname]}
-              items={items}
-              style={{ border: "none" }}
-            />
+          >{items.map((item) => (
+              <div key={item.key} style={{ 
+                padding: "8px 12px",
+                borderRadius: "4px",
+                transition: "background-color 0.3s",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center", // Căn giữa nội dung trong item
+                height: "45px" // Cùng chiều cao với logo
+              }}>
+                {item.label}
+              </div>
+            ))}
           </div>
-
-          {/* Mobile Menu Button */}
+        </div>        
+        {/* Mobile Menu Button and Auth Buttons */}
+        <div style={{ display: "flex", alignItems: "center" }}>
           <Button
             className="mobile-menu-button"
-            type="text"
-            icon={<MenuOutlined />}
+            type="text"            icon={<MenuOutlined />}
             onClick={toggleDrawer}
-            style={{
-              display: "block",
-              "@media (min-width: 768px)": { display: "none" },
+            style={{ 
+              marginRight: 10, 
+              display: "none" // Control bởi CSS responsive
             }}
           />
-        </div>
-
-        <div>
-          {isAuthenticated ? (
-            <UserDropdown />
-          ) : (
+          {!isAuthenticated ? (
             <div>
               <Link to="/login">
                 <Button type="primary" style={{ marginRight: 10 }}>
@@ -131,11 +147,11 @@ const Navbar: React.FC = () => {
                 <Button>Đăng ký</Button>
               </Link>
             </div>
+          ) : (
+            <UserDropdown />
           )}
         </div>
-      </div>
-
-      {/* Mobile Drawer Menu */}
+      </div>      
       <Drawer
         title="Menu"
         placement="left"
@@ -149,6 +165,11 @@ const Navbar: React.FC = () => {
           items={items}
           style={{ border: "none" }}
         />
+        {isAuthenticated && (
+          <div style={{ padding: "16px", borderTop: "1px solid #f0f0f0", marginTop: "16px" }}>
+            <UserDropdown />
+          </div>
+        )}
       </Drawer>
     </Header>
   );

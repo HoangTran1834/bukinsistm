@@ -188,12 +188,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def partial_update(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
-
-class IsNhanVien(BasePermission):
-    def has_permission(self, request, view):
-        # Admin (vaiTro=0) hoặc Nhân viên (vaiTro=2) đều có quyền
-        return bool(request.user and request.user.is_authenticated and getattr(request.user, 'vaitro', None) in [0, 2])
-
+    
 class ShiftViewSet(viewsets.ModelViewSet):
     queryset = Ca.objects.all()
     serializer_class = CaSerializer
@@ -229,15 +224,36 @@ class ShiftViewSet(viewsets.ModelViewSet):
 
     @extend_schema(**update_shift_schema())
     def update(self, request, *args, **kwargs):
-        return super().update(request, *args, **kwargs)
-
-    @extend_schema(**update_shift_schema())
+        return super().update(request, *args, **kwargs)    @extend_schema(**update_shift_schema())
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)    
     
     @extend_schema(**delete_shift_schema())
     def destroy(self, request, *args, **kwargs):
-        return super().destroy(request, *args, **kwargs)
+        """Xóa ca (chỉ cho phép xóa ca chưa có chi tiết hoặc booking)"""
+        ca = self.get_object()
+        
+        # Kiểm tra xem ca có chi tiết không
+        chitiet_count = Chitietca.objects.filter(maca=ca).count()
+        if chitiet_count > 0:
+            return Response({
+                'error': f'Không thể xóa ca này vì có {chitiet_count} chi tiết ca đang được sử dụng',
+                'suggestion': 'Hãy xóa tất cả chi tiết ca trước khi xóa ca'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        ca_info = {
+            'maca': ca.maca,
+            'gioxuatphat': str(ca.gioxuatphat),
+            'ngayxuatphat': str(ca.ngayxuatphat),
+            'huyen': ca.mahuyenxuatphat.tenhuyen if ca.mahuyenxuatphat else None
+        }
+        
+        ca.delete()
+        
+        return Response({
+            'message': 'Xóa ca thành công',
+            'deleted_ca': ca_info
+        })
 
     @action(detail=False, methods=['get'], url_path='taixe')
     def get_drivers(self, request):
@@ -252,14 +268,27 @@ class ShiftViewSet(viewsets.ModelViewSet):
         vehicles = Xe.objects.all()
         serializer = XeSerializer(vehicles, many=True)
         return Response(serializer.data)    
-    
+      
     @extend_schema(**create_shift_detail_schema())
-    @action(detail=True, methods=['post'], url_path='chitiet')
-    def create_shift_detail(self, request, pk=None):
-        """Tạo chi tiết ca (gán tài xế và xe vào ca)"""
+    @action(detail=True, methods=['post', 'get', 'delete'], url_path='chitiet')
+    def manage_shift_details(self, request, pk=None):
+        """
+        Quản lý chi tiết ca (gán tài xế và xe vào ca)
+        - POST: Tạo chi tiết ca mới
+        - GET: Lấy danh sách chi tiết ca
+        - DELETE: Xóa chi tiết ca (cần chitietca_id trong body)
+        """
         ca = self.get_object()
         
-        maca = ca.maca
+        if request.method == 'POST':
+            return self._create_shift_detail(request, ca)
+        elif request.method == 'GET':
+            return self._get_shift_details(request, ca)
+        elif request.method == 'DELETE':
+            return self._delete_shift_detail(request, ca)
+    
+    def _create_shift_detail(self, request, ca):
+        """Tạo chi tiết ca mới"""
         maxe = request.data.get('maxe')
         mataixe = request.data.get('mataixe')
         
@@ -277,6 +306,20 @@ class ShiftViewSet(viewsets.ModelViewSet):
         except Taixe.DoesNotExist:
             return Response({'error': 'Tài xế không tồn tại'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Kiểm tra xe hoặc tài xế đã được gán cho ca này chưa
+        existing_xe = Chitietca.objects.filter(maca=ca, maxe=xe).exists()
+        existing_taixe = Chitietca.objects.filter(maca=ca, mataixe=taixe).exists()
+        
+        if existing_xe:
+            return Response({
+                'error': f'Xe {xe.biensoxe} đã được gán cho ca này'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        if existing_taixe:
+            return Response({
+                'error': f'Tài xế {taixe.mataixe.hoten} đã được gán cho ca này'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Tạo chi tiết ca
         chitiet_ca = Chitietca.objects.create(
             maca=ca,
@@ -284,26 +327,146 @@ class ShiftViewSet(viewsets.ModelViewSet):
             mataixe=taixe
         )
         
-        serializer = ChitietcaSerializer(chitiet_ca)
+        # Trả về với thông tin chi tiết
         return Response({
             'message': 'Tạo chi tiết ca thành công',
-            'data': serializer.data
+            'data': {
+                'machitietca': chitiet_ca.machitietca,
+                'maca': chitiet_ca.maca.maca,
+                'xe_info': {
+                    'maxe': xe.maxe,
+                    'biensoxe': xe.biensoxe,
+                    'loaixe': xe.loaixe,
+                    'sochongoi': xe.sochongoi,
+                    'bienso_color': xe.mau if hasattr(xe, 'mau') else None
+                },
+                'taixe_info': {
+                    'mataixe': taixe.mataixe_id,
+                    'hoten': taixe.mataixe.hoten,
+                    'sodienthoai': taixe.mataixe.sodienthoai,
+                    'cccd': taixe.cccd,
+                    'gplx': taixe.gplx,
+                    'trangthai': taixe.trangthai
+                }
+            }
         }, status=status.HTTP_201_CREATED)
+    
+    def _get_shift_details(self, request, ca):
+        """Lấy danh sách chi tiết ca với thông tin chi tiết tài xế và xe"""
+        chitiet_ca_list = Chitietca.objects.filter(maca=ca).select_related('maxe', 'mataixe__mataixe')
+        
+        if not chitiet_ca_list.exists():
+            return Response({
+                'message': 'Ca này chưa có chi tiết nào',
+                'ca_info': {
+                    'maca': ca.maca,
+                    'gioxuatphat': str(ca.gioxuatphat),
+                    'ngayxuatphat': str(ca.ngayxuatphat)
+                },
+                'data': []
+            })
+        
+        result = []
+        for chitiet in chitiet_ca_list:
+            xe = chitiet.maxe
+            taixe = chitiet.mataixe
+            
+            result.append({
+                'machitietca': chitiet.machitietca,
+                'maca': chitiet.maca.maca,
+                'xe_info': {
+                    'maxe': xe.maxe,
+                    'biensoxe': xe.biensoxe,
+                    'loaixe': xe.loaixe,
+                    'sochongoi': xe.sochongoi
+                },                
+                'taixe_info': {
+                    'mataixe': taixe.mataixe_id,
+                    'hoten': taixe.mataixe.hoten,
+                    'sodienthoai': taixe.mataixe.sodienthoai,
+                    'email': taixe.mataixe.email,
+                    'cccd': taixe.cccd,
+                    'trangthai': taixe.trangthai
+                }
+            })
+        
+        return Response({
+            'message': f'Tìm thấy {len(result)} chi tiết ca',
+            'ca_info': {
+                'maca': ca.maca,
+                'gioxuatphat': str(ca.gioxuatphat),
+                'ngayxuatphat': str(ca.ngayxuatphat),
+                'huyen_xuat_phat': ca.mahuyenxuatphat_id
+            },
+            'data': result
+        })
+    
+    def _delete_shift_detail(self, request, ca):
+        """Xóa chi tiết ca"""
+        chitietca_id = request.data.get('chitietca_id')
+        
+        if not chitietca_id:
+            return Response({
+                'error': 'Cần cung cấp chitietca_id để xóa'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            chitiet_ca = Chitietca.objects.get(
+                machitietca=chitietca_id,
+                maca=ca
+            )
+            
+            # Lưu thông tin trước khi xóa
+            xe_info = {
+                'biensoxe': chitiet_ca.maxe.biensoxe,
+                'maxe': chitiet_ca.maxe.maxe
+            }
+            taixe_info = {
+                'hoten': chitiet_ca.mataixe.mataixe.hoten,
+                'mataixe': chitiet_ca.mataixe.mataixe_id
+            }
+            
+            # Kiểm tra xem có booking nào đã được gán cho chi tiết ca này chưa
+            bookings_count = Datxe.objects.filter(machitietca=chitiet_ca).count()
+            booking_details_count = Chitietdatxe.objects.filter(machitietca=chitiet_ca).count()
+            
+            if bookings_count > 0 or booking_details_count > 0:
+                return Response({
+                    'error': f'Không thể xóa chi tiết ca này vì đã có {bookings_count} booking và {booking_details_count} chi tiết booking được gán',
+                    'suggestion': 'Hãy chuyển các booking sang chi tiết ca khác trước khi xóa'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            chitiet_ca.delete()
+            
+            return Response({
+                'message': 'Xóa chi tiết ca thành công',
+                'deleted_info': {
+                    'chitietca_id': chitietca_id,
+                    'xe': xe_info,
+                    'taixe': taixe_info                }
+            })
+            
+        except Chitietca.DoesNotExist:
+            return Response({
+                'error': f'Không tìm thấy chi tiết ca {chitietca_id} trong ca {ca.maca}'
+            }, status=status.HTTP_404_NOT_FOUND)
 
 class BookingViewSet(viewsets.ModelViewSet):
     queryset = Datxe.objects.all()
     serializer_class = BookingSerializer
 
     def get_queryset(self):
-        user = self.request.user
-        # Nếu là tài xế (vaiTro=1) chỉ xem các booking có chi tiết ca tài xế thuộc về mình
-        if getattr(user, 'vaitro', None) == 1:
-            return Datxe.objects.filter(machitietca__mataixe=user.pk).distinct()
-        # Nếu là admin hoặc nhân viên thì xem tất cả
-        if getattr(user, 'vaitro', None) in [0, 2]:
-            return super().get_queryset()
-        # Hành khách chỉ xem booking của mình        
-        return Datxe.objects.filter(manguoidung_id=user.pk)
+        # Tạm thời chỉ allow tất cả xem được hết, các điều kiện còn lại comment lại
+        return super().get_queryset()
+        # user = self.request.user
+        # # Nếu là tài xế (vaiTro=1) chỉ xem các booking có chi tiết ca tài xế thuộc về mình
+        # if getattr(user, 'vaitro', None) == 1:
+        #     return Datxe.objects.filter(machitietca__mataixe=user.pk).distinct()
+        # # Nếu là admin hoặc nhân viên thì xem tất cả
+        # if getattr(user, 'vaitro', None) in [0, 2]:
+        #     return super().get_queryset()
+        # # Hành khách chỉ xem booking của mình        
+        # return Datxe.objects.filter(manguoidung_id=user.pk)
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -337,13 +500,23 @@ class BookingViewSet(viewsets.ModelViewSet):
     )
     def create(self, request, *args, **kwargs):
         # Logic tạo booking và tìm tuyến đường đã được chuyển vào CreateBookingSerializer
+        # CreateBookingSerializer.create() cũng sẽ tự động gọi assign_driver_for_shift
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         booking = serializer.save()
         
         # Trả về response với BookingSerializer để hiển thị đầy đủ thông tin
         response_serializer = BookingSerializer(booking)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        response_data = response_serializer.data
+        
+        # Thêm thông tin về auto-assign
+        response_data['auto_assign_info'] = {
+            'message': 'Hệ thống đã tự động phân bổ lại toàn bộ ca sau khi tạo booking',
+            'ca_id': booking.maca.maca,
+            'note': 'Kiểm tra log để xem chi tiết quá trình auto-assign'
+        }
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         description="Tự động xếp hành khách vào chi tiết ca còn chỗ. Chỉ cần cung cấp thông tin khách, hướng, thời gian mong muốn. API sẽ tự xếp vào chi tiết ca còn chỗ đầu tiên.",
@@ -975,7 +1148,7 @@ class RouteViewSet(viewsets.ViewSet):
         except Exception as e:
             print(f"🚌 [ASSIGN] Lỗi: {str(e)}")
             return Response({'error': f'Lỗi hệ thống: {str(e)}'}, status=500)
-
+    
     def create_time_matrix_for_vrp(self, passengers, chitietca_list):
         """Tạo ma trận thời gian từ tọa độ các điểm đón/trả và depot"""
         import requests
@@ -984,9 +1157,8 @@ class RouteViewSet(viewsets.ViewSet):
         # Tạo danh sách locations
         all_locations = []
         
-        # Depot (điểm xuất phát chung) - lấy từ ca đầu tiên hoặc default
-        # Giả sử depot là Đà Nẵng hoặc Tam Kỳ tùy thuộc vào huyện xuất phát
-        depot_location = {"lat": 16.080, "lon": 108.230}  # Mặc định Đà Nẵng
+        # Xác định depot dựa trên huyện xuất phát của ca
+        depot_location = self.get_depot_location(chitietca_list)
         all_locations.append(depot_location)
         
         # Thêm các điểm đón và trả của hành khách
@@ -1166,12 +1338,14 @@ class RouteViewSet(viewsets.ViewSet):
             from ortools.constraint_solver import routing_enums_pb2
             from ortools.constraint_solver import pywrapcp
             
-            print(f"🚌 [VRP] Thiết lập VRP với {data['num_vehicles']} vehicles, {len(data['time_matrix'])} locations")
+            print(f"🚌 [VRP] Thiết lập OPEN VRP (xe không cần quay về depot) với {data['num_vehicles']} vehicles, {len(data['time_matrix'])} locations")
             print(f"🚌 [VRP] Vehicle capacities: {data['vehicle_capacities']}")
             print(f"🚌 [VRP] Pickup-delivery pairs: {data['pickups_deliveries']}")
             
-            # Create routing manager và model
-            manager = pywrapcp.RoutingIndexManager(len(data['time_matrix']), data['num_vehicles'], data['depot'])
+            # Create routing manager với start/end khác nhau (Open VRP)
+            starts = [data['depot']] * data['num_vehicles']  # Tất cả xe xuất phát từ depot
+            ends = [data['depot']] * data['num_vehicles']    # Nhưng có thể kết thúc ở depot hoặc điểm khác
+            manager = pywrapcp.RoutingIndexManager(len(data['time_matrix']), data['num_vehicles'], starts, ends)
             routing = pywrapcp.RoutingModel(manager)
             
             # Define cost callback
@@ -1205,16 +1379,46 @@ class RouteViewSet(viewsets.ViewSet):
                 routing.solver().Add(
                     routing.VehicleVar(pickup_index) == routing.VehicleVar(delivery_index))
                 print(f"  - Constraint {i+1}: pickup {request[0]} -> delivery {request[1]}")
+              # Thêm constraint phân bổ đều (Load Balancing) - CHỈ KHI CẦN THIẾT
+            print(f"🚌 [VRP] Thêm Load Balancing constraints để phân bổ đều")
+            capacity_dimension = routing.GetDimensionOrDie('Capacity')
             
-            # Set search parameters
+            # Tính số hành khách trung bình mỗi xe
+            total_passengers = len(data['pickups_deliveries'])
+            num_vehicles = data['num_vehicles']
+            
+            print(f"🚌 [VRP] Total: {total_passengers} passengers, {num_vehicles} vehicles")
+            
+            # CHỈ ÁP DỤNG LOAD BALANCING KHI SỐ HÀNH KHÁCH >= SỐ XE
+            if total_passengers >= num_vehicles:
+                avg_passengers_per_vehicle = total_passengers / num_vehicles
+                min_passengers_per_vehicle = max(0, int(avg_passengers_per_vehicle * 0.5))  # Ít nhất 50% average
+                max_passengers_per_vehicle = int(avg_passengers_per_vehicle * 1.5) + 1      # Nhiều nhất 150% average
+                
+                print(f"🚌 [VRP] Average per vehicle: {avg_passengers_per_vehicle:.1f}")
+                print(f"🚌 [VRP] Min-Max per vehicle: {min_passengers_per_vehicle}-{max_passengers_per_vehicle}")
+                
+                # Áp dụng constraint load balancing cho từng xe
+                for vehicle_id in range(num_vehicles):
+                    if min_passengers_per_vehicle > 0:
+                        routing.solver().Add(
+                            capacity_dimension.CumulVar(routing.End(vehicle_id)) >= min_passengers_per_vehicle)
+                    routing.solver().Add(
+                        capacity_dimension.CumulVar(routing.End(vehicle_id)) <= max_passengers_per_vehicle)
+                    print(f"  - Vehicle {vehicle_id}: phải chở {min_passengers_per_vehicle}-{max_passengers_per_vehicle} ghế")
+            else:
+                print(f"🚌 [VRP] Bỏ qua Load Balancing vì số hành khách ({total_passengers}) < số xe ({num_vehicles})")
+                print(f"🚌 [VRP] Cho phép xe có thể không chở ai hoặc chở nhiều hành khách")
+              # Set search parameters với focus vào phân bổ đều
             search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+            # Sử dụng strategy tốt cho load balancing
             search_parameters.first_solution_strategy = (
-                routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
+                routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION)
             search_parameters.local_search_metaheuristic = (
                 routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH)
-            search_parameters.time_limit.FromSeconds(5)
+            search_parameters.time_limit.FromSeconds(10)  # Tăng thời gian để tìm solution tốt hơn
             
-            print(f"🚌 [VRP] Bắt đầu giải VRP...")
+            print(f"🚌 [VRP] Bắt đầu giải OPEN VRP với Load Balancing...")
             # Solve
             solution = routing.SolveWithParameters(search_parameters)
             
@@ -1248,60 +1452,129 @@ class RouteViewSet(viewsets.ViewSet):
             
             route.append(manager.IndexToNode(index))  # End node
             routes[vehicle_id] = route
-            print(f"🚌 [VRP] Vehicle {vehicle_id}: route = {route}")
-            
+            print(f"🚌 [VRP] Vehicle {vehicle_id}: route = {route}")            
         return routes
-
+    
     def map_passengers_to_assignments(self, passengers, pickup_delivery_pairs, solution_routes, assignments, chitietca_list):
-        """Map passengers vào assignments dựa trên VRP solution"""
+        """Map passengers vào assignments dựa trên VRP solution với kiểm tra capacity chặt chẽ"""
         
-        # Tạo mapping từ pickup/delivery index sang passenger
+        # Tạo mapping từ pickup/delivery index sang passenger - CHỈ DÙNG PICKUP INDEX
         pickup_to_passenger = {}
         for i, (pickup_idx, delivery_idx) in enumerate(pickup_delivery_pairs):
             pickup_to_passenger[pickup_idx] = passengers[i]
-            pickup_to_passenger[delivery_idx] = passengers[i]
+            # KHÔNG map delivery_idx để tránh duplicate
         
-        # Gán passengers vào từng vehicle
+        # Tracking toàn bộ passengers đã được assign
+        global_assigned_passenger_ids = set()
+        
+        # Gán passengers vào từng vehicle với kiểm tra capacity
         for vehicle_id, route in solution_routes.items():
             if vehicle_id < len(chitietca_list):
                 cc = chitietca_list[vehicle_id]
                 assignment = assignments[cc.machitietca]
-                assigned_passenger_ids = set()  # Lưu ID thay vì object
+                
+                print(f"🚌 [VRP] Processing vehicle {vehicle_id} (xe {cc.maxe.biensoxe}, capacity: {cc.maxe.sochongoi})")
+                print(f"🚌 [VRP] Route: {route}")
                 
                 for node in route:
-                    if node in pickup_to_passenger:
+                    if node in pickup_to_passenger:  # CHỈ XỬ LÝ PICKUP NODES
                         passenger = pickup_to_passenger[node]
-                        # Sử dụng ID làm key để tránh lỗi unhashable
                         passenger_key = f"{passenger['type']}_{passenger['id']}"
                         
-                        if passenger_key not in assigned_passenger_ids:
-                            assignment['passengers'].append(passenger)
-                            assignment['seats_used'] += passenger['soghe']
-                            assigned_passenger_ids.add(passenger_key)
-                            print(f"🚌 [VRP] Gán {passenger['ten']} vào xe {cc.maxe.biensoxe}")
+                        # Kiểm tra passenger chưa được assign ở bất kỳ đâu
+                        if passenger_key not in global_assigned_passenger_ids:
+                            # KIỂM TRA CAPACITY CHẶT CHẼ
+                            current_used = assignment['seats_used']
+                            passenger_seats = passenger['soghe']
+                            capacity = assignment['capacity']
+                            
+                            print(f"🚌 [VRP] Kiểm tra {passenger['ten']} ({passenger_seats} ghế): {current_used} + {passenger_seats} <= {capacity} ?")
+                            
+                            if current_used + passenger_seats <= capacity:
+                                assignment['passengers'].append(passenger)
+                                assignment['seats_used'] += passenger_seats
+                                global_assigned_passenger_ids.add(passenger_key)
+                                print(f"🚌 [VRP] ✅ Gán {passenger['ten']} ({passenger_seats} ghế) vào xe {cc.maxe.biensoxe} - Sử dụng: {assignment['seats_used']}/{capacity}")
+                            else:
+                                print(f"🚌 [VRP] ❌ KHÔNG THỂ gán {passenger['ten']} ({passenger_seats} ghế) vào xe {cc.maxe.biensoxe} - Sẽ vượt quá capacity: {current_used + passenger_seats} > {capacity}")
+                                # Tìm xe khác có thể chứa
+                                alternative_found = False
+                                for alt_cc in chitietca_list:
+                                    alt_assignment = assignments.get(alt_cc.machitietca)
+                                    if alt_assignment and alt_assignment['seats_used'] + passenger_seats <= alt_assignment['capacity']:
+                                        alt_assignment['passengers'].append(passenger)
+                                        alt_assignment['seats_used'] += passenger_seats
+                                        global_assigned_passenger_ids.add(passenger_key)
+                                        alternative_found = True
+                                        print(f"🚌 [VRP] 🔄 Chuyển {passenger['ten']} sang xe {alt_cc.maxe.biensoxe} - Sử dụng: {alt_assignment['seats_used']}/{alt_assignment['capacity']}")
+                                        break
+                                
+                                if not alternative_found:
+                                    print(f"🚌 [VRP] ⚠️ CẢNH BÁO: Không tìm được xe nào có thể chứa {passenger['ten']} ({passenger_seats} ghế)")
+                        else:
+                            print(f"🚌 [VRP] ⏭️ Bỏ qua {passenger['ten']} - đã được assign rồi")
+        
+        # In thống kê kết quả phân bổ
+        print(f"🚌 [VRP] === SUMMARY PHÂN BỔ ===")
+        total_assigned = len(global_assigned_passenger_ids)
+        total_passengers = len(passengers)
+        print(f"🚌 [VRP] Đã phân bổ: {total_assigned}/{total_passengers} hành khách")
+        
+        for cc in chitietca_list:
+            assignment = assignments.get(cc.machitietca)
+            if assignment:
+                usage_percent = (assignment['seats_used'] / assignment['capacity'] * 100) if assignment['capacity'] > 0 else 0
+                print(f"🚌 [VRP] Xe {cc.maxe.biensoxe}: {len(assignment['passengers'])} hành khách, {assignment['seats_used']}/{assignment['capacity']} ghế ({usage_percent:.1f}%)")
 
     def assign_passengers_greedy(self, passengers, chitietca_list):
-        """Fallback greedy algorithm nếu VRP không khả dụng"""
-        print("🚌 [ASSIGN] Sử dụng greedy algorithm")
+        """Fallback greedy algorithm nếu VRP không khả dụng với phân bổ đều"""
+        print("🚌 [ASSIGN] Sử dụng improved greedy algorithm")
         
-        chitietca_sorted = sorted(chitietca_list, key=lambda x: x.maxe.sochongoi, reverse=True)
+        # Khởi tạo assignments cho tất cả xe
         assignments = {cc.machitietca: {'passengers': [], 'seats_used': 0, 'capacity': cc.maxe.sochongoi} 
-                      for cc in chitietca_sorted}
+                      for cc in chitietca_list}
         
+        # Sắp xếp hành khách theo số ghế giảm dần
         passengers_sorted = sorted(passengers, key=lambda x: x['soghe'], reverse=True)
         
-        for passenger in passengers_sorted:
+        print(f"🚌 [GREEDY] Cần phân bổ {len(passengers_sorted)} hành khách cho {len(chitietca_list)} xe")
+        
+        for i, passenger in enumerate(passengers_sorted):
             assigned = False
-            for cc in chitietca_sorted:
+            
+            # Tìm xe có tỷ lệ sử dụng thấp nhất mà vẫn đủ chỗ
+            best_cc = None
+            best_utilization = float('inf')
+            
+            for cc in chitietca_list:
                 assignment = assignments[cc.machitietca]
+                
+                # Kiểm tra có đủ chỗ không
                 if assignment['seats_used'] + passenger['soghe'] <= assignment['capacity']:
-                    assignment['passengers'].append(passenger)
-                    assignment['seats_used'] += passenger['soghe']
-                    assigned = True
-                    break
+                    # Tính tỷ lệ sử dụng sau khi gán
+                    utilization_after = (assignment['seats_used'] + passenger['soghe']) / assignment['capacity']
+                    
+                    # Ưu tiên xe có tỷ lệ sử dụng thấp hơn để phân bổ đều
+                    if utilization_after < best_utilization:
+                        best_utilization = utilization_after
+                        best_cc = cc
+            
+            # Gán vào xe tốt nhất
+            if best_cc:
+                assignment = assignments[best_cc.machitietca]
+                assignment['passengers'].append(passenger)
+                assignment['seats_used'] += passenger['soghe']
+                assigned = True
+                print(f"🚌 [GREEDY] Gán {passenger['ten']} ({passenger['soghe']} ghế) vào xe {best_cc.maxe.biensoxe} - Sử dụng: {assignment['seats_used']}/{assignment['capacity']} ({assignment['seats_used']/assignment['capacity']*100:.1f}%)")
             
             if not assigned:
+                print(f"🚌 [GREEDY] ❌ Không thể gán {passenger['ten']} ({passenger['soghe']} ghế) - Không đủ chỗ")
                 return None
+        
+        # In summary
+        for cc in chitietca_list:
+            assignment = assignments[cc.machitietca]
+            print(f"🚌 [GREEDY] Xe {cc.maxe.biensoxe}: {len(assignment['passengers'])} hành khách, {assignment['seats_used']}/{assignment['capacity']} ghế ({assignment['seats_used']/assignment['capacity']*100:.1f}%)")
                 
         return assignments
 
@@ -1311,6 +1584,7 @@ class RouteViewSet(viewsets.ViewSet):
         responses={200: GetHuyenOutputSerializer},
         examples=[
             OpenApiExample(
+               
                 'Get huyện mẫu',
                 value={"lat": "16.05", "lon": "108.2"},
                 request_only=True,
@@ -1553,4 +1827,45 @@ class RouteViewSet(viewsets.ViewSet):
                 "success": False,
                 "message": f"Lỗi xử lý: {str(e)}"
             }, status=500)
+    
+    def get_depot_location(self, chitietca_list):
+        """Xác định depot location dựa trên huyện xuất phát của ca"""
+        try:
+            if not chitietca_list:
+                # Mặc định Đà Nẵng nếu không có chi tiết ca
+                print("🚌 [DEPOT] Không có chi tiết ca, dùng depot mặc định Đà Nẵng")
+                return {"lat": 16.080, "lon": 108.230}
+            
+            # Lấy ca từ chi tiết ca đầu tiên
+            ca = chitietca_list[0].maca
+            huyen_xuatphat = ca.mahuyenxuatphat
+            
+            print(f"🚌 [DEPOT] Ca {ca.maca} xuất phát từ huyện: {huyen_xuatphat.tenhuyen}")
+            
+            # Mapping huyện sang tọa độ depot
+            depot_coords = {
+                'Đà Nẵng': {"lat": 16.080, "lon": 108.230},
+                'Tam Kỳ': {"lat": 15.5526936, "lon": 108.4990231},
+                # Có thể thêm huyện khác nếu cần
+            }
+            
+            # Tìm depot dựa trên tên huyện
+            depot_location = None
+            for huyen_name, coords in depot_coords.items():
+                if huyen_name.lower() in huyen_xuatphat.tenhuyen.lower():
+                    depot_location = coords
+                    print(f"🚌 [DEPOT] Chọn depot {huyen_name}: {coords}")
+                    break
+            
+            # Nếu không tìm thấy, dùng mặc định
+            if not depot_location:
+                depot_location = {"lat": 16.080, "lon": 108.230}
+                print(f"🚌 [DEPOT] Không nhận diện được huyện '{huyen_xuatphat.tenhuyen}', dùng mặc định Đà Nẵng")
+            
+            return depot_location
+            
+        except Exception as e:
+            print(f"🚌 [DEPOT] Lỗi khi xác định depot: {str(e)}")
+            # Fallback về Đà Nẵng
+            return {"lat": 16.080, "lon": 108.230}
 

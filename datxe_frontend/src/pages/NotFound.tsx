@@ -1,34 +1,32 @@
 import React from "react";
-import { Result, Button } from "antd";
+import { Result, Button, Typography, Space } from "antd";
 import { Link } from "react-router-dom";
+import { HomeOutlined } from "@ant-design/icons";
+
+const { Title, Text } = Typography;
 
 const NotFound: React.FC = () => {
   return (
-    <Result
-      status="404"
-      title="404"
-      subTitle="Trang bạn tìm kiếm không tồn tại."
-      extra={
-        <Link to="/">
-          <Button type="primary">Về trang chủ</Button>
-        </Link>
-      }
-    />
-  );
-};
-
-export default NotFound;
+    <div style={{ 
+      minHeight: "100vh", 
+      display: "flex", 
+      alignItems: "center", 
+      justifyContent: "center",
+      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+    }}>
+      <Result
+        status="404"
         title={
-          <Title level={1} style={{ fontSize: "4rem", marginBottom: "0" }}>
+          <Title level={1} style={{ fontSize: "4rem", marginBottom: "0", color: "#fff" }}>
             404
           </Title>
         }
         subTitle={
           <Space direction="vertical" size="small" align="center">
-            <Title level={3} style={{ marginTop: "0" }}>
+            <Title level={3} style={{ marginTop: "0", color: "#fff" }}>
               Oops! Trang không tìm thấy
             </Title>
-            <Text type="secondary">
+            <Text style={{ color: "#f0f0f0" }}>
               Trang bạn đang tìm kiếm không tồn tại hoặc đã bị di chuyển.
             </Text>
           </Space>
@@ -57,4 +55,4 @@ export default NotFound;
   );
 };
 
-export default NotFoundPage;
+export default NotFound;

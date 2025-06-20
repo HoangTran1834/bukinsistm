@@ -7,7 +7,7 @@ import {
   MailOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "../contexts/authContext";
 import { notification } from "antd";
 import { registerUserAPI } from "../services/api.service";
 
@@ -38,7 +38,7 @@ const Register: React.FC = () => {
         values.fullName,
         values.phone,
         values.password,
-        values.email
+        values.email ?? ""
       );
 
       if (res.data) {
@@ -51,8 +51,8 @@ const Register: React.FC = () => {
         notification.error({
           message: "Đăng ký",
           description:
-            Array.isArray(res?.message) || typeof res?.message === "string"
-              ? res?.message
+            Array.isArray(res?.data?.message) || typeof res?.data?.message === "string"
+              ? res?.data?.message
               : "Đăng ký thất bại. Vui lòng thử lại sau.",
         });
       }

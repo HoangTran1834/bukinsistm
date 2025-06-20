@@ -64,3 +64,41 @@
 .ant-layout-content {
   background-color: #f0f2f5;
 }
+
+/* Expandable table styles */
+.ant-table-expanded-row > td {
+  padding: 0 !important;
+}
+
+.ant-table-expanded-row .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.ant-table-expanded-row .ant-table-tbody > tr:last-child > td {
+  border-bottom: none;
+}
+
+.shifts-detail-table {
+  margin: 16px 0;
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.shifts-detail-header {
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #1890ff;
+}
+
+/* Button styles for actions */
+.ant-btn-sm {
+  font-size: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ant-table-scroll {
+    overflow-x: auto;
+  }
+}

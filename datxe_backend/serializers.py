@@ -24,7 +24,7 @@ class DiadiemSerializer(serializers.ModelSerializer):
 
 class CreateDiadiemSerializer(serializers.Serializer):
     """Serializer cho tạo địa điểm mới"""
-    tendiadiem = serializers.CharField(max_length=100, help_text="Tên địa điểm")
+    tendiadiem = serializers.CharField(max_length=255, help_text="Tên địa điểm")
     lat = serializers.FloatField(help_text="Vĩ độ (latitude)")
     lon = serializers.FloatField(help_text="Kinh độ (longitude)")
     
@@ -205,11 +205,11 @@ class CreateBookingSerializer(serializers.ModelSerializer):
             diemtra_ct = chitiet_data.get('diemtra')
             
             if diemdon_ct and diemtra_ct:
-                try:
-                    # Lấy tọa độ từ địa điểm đi và đến của chi tiết
+                try:                    # Lấy tọa độ từ địa điểm đi và đến của chi tiết
                     diemdon_ct_obj = Diadiem.objects.get(pk=diemdon_ct.madiadiem)
                     diemtra_ct_obj = Diadiem.objects.get(pk=diemtra_ct.madiadiem)
-                      # Sử dụng trực tiếp vido, kinhdo (đã là float)
+                    
+                    # Sử dụng trực tiếp vido, kinhdo (đã là float)
                     lat_don_ct = diemdon_ct_obj.vido
                     lon_don_ct = diemdon_ct_obj.kinhdo
                     lat_tra_ct = diemtra_ct_obj.vido
@@ -234,6 +234,30 @@ class CreateBookingSerializer(serializers.ModelSerializer):
                 trangthai="Đã đặt",
                 **chitiet_data
             )
+        
+        # Auto-assign: Tự động gọi assign_driver_for_shift cho ca chứa booking này
+        print(f"🚌 [AUTO-ASSIGN] Booking {booking.madatxe} đã tạo thành công, bắt đầu auto-assign cho ca {booking.maca.maca}")
+        try:
+            from .views import RouteViewSet
+            route_viewset = RouteViewSet()
+            
+            # Tạo fake request để gọi assign_driver_for_shift
+            class FakeRequest:
+                def __init__(self, ca_id):
+                    self.data = {'ca_id': ca_id}
+            
+            fake_request = FakeRequest(booking.maca.maca)
+            assign_response = route_viewset.assign_driver_for_shift(fake_request)
+            
+            if assign_response.status_code == 200:
+                print(f"🚌 [AUTO-ASSIGN] ✅ Thành công auto-assign cho ca {booking.maca.maca}")
+                print(f"🚌 [AUTO-ASSIGN] {assign_response.data.get('message', '')}")
+            else:
+                print(f"🚌 [AUTO-ASSIGN] ⚠️ Không thể auto-assign cho ca {booking.maca.maca}: {assign_response.data}")
+                
+        except Exception as e:
+            print(f"🚌 [AUTO-ASSIGN] ❌ Lỗi khi auto-assign cho ca {booking.maca.maca}: {str(e)}")
+            # Không raise exception để không ảnh hưởng việc tạo booking
         
         return booking
         
