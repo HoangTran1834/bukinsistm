@@ -65,6 +65,8 @@ CREATE TABLE `DatXe` (
     `trangThai` VARCHAR(50) NOT NULL,
     `ghiChu` TEXT,
     `soGhe` INT NOT NULL DEFAULT 1, -- thêm số ghế
+    `thuTuDon` INT NULL, -- thứ tự đón khách (optional)
+    `thuTuTra` INT NULL, -- thứ tự trả khách (optional)
     PRIMARY KEY (`maDatXe`)
 );
 
@@ -87,6 +89,7 @@ CREATE TABLE `Ca` (
     `gioXuatPhat` TIME NOT NULL,
     `ngayXuatPhat` DATE NOT NULL,
     `maHuyenXuatPhat` INT NOT NULL,
+    `daXoa` BOOLEAN NOT NULL DEFAULT 0,
     PRIMARY KEY (`maCa`)
 );
 
@@ -127,6 +130,8 @@ CREATE TABLE `ChiTietDatXe` (
     `trangThai` VARCHAR(50) NOT NULL,
     `ghiChu` TEXT,
     `soGhe` INT NOT NULL DEFAULT 1, -- thêm số ghế
+    `thuTuDon` INT NULL, -- thứ tự đón khách (optional)
+    `thuTuTra` INT NULL, -- thứ tự trả khách (optional)
     PRIMARY KEY (`maChiTiet`)
 );
 
@@ -149,14 +154,14 @@ ALTER TABLE `DatXe` ADD FOREIGN KEY (`maChiTietCa`) REFERENCES `ChiTietCa`(`maCh
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`maTuyenDuong`) REFERENCES `TuyenDuong`(`maTuyenDuong`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`diemDon`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `DatXe` ADD FOREIGN KEY (`diemTra`) REFERENCES `DiaDiem`(`maDiaDiem`);
-ALTER TABLE `DanhGia` ADD FOREIGN KEY (`maDatXe`) REFERENCES `DatXe`(`maDatXe`);
-ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maDatXe`) REFERENCES `DatXe`(`maDatXe`);
+ALTER TABLE `DanhGia` ADD FOREIGN KEY (`maDatXe`) REFERENCES `DatXe`(`maDatXe`) ON DELETE CASCADE;
+ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maDatXe`) REFERENCES `DatXe`(`maDatXe`) ON DELETE CASCADE;
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maChiTietCa`) REFERENCES `ChiTietCa`(`maChiTietCa`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`maTuyenDuong`) REFERENCES `TuyenDuong`(`maTuyenDuong`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`diemTra`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `ChiTietDatXe` ADD FOREIGN KEY (`diemDon`) REFERENCES `DiaDiem`(`maDiaDiem`);
 ALTER TABLE `Ca` ADD FOREIGN KEY (`maHuyenXuatPhat`) REFERENCES `Huyen`(`maHuyen`);
-ALTER TABLE `ChiTietCa` ADD FOREIGN KEY (`maCa`) REFERENCES `Ca`(`maCa`);
+ALTER TABLE `ChiTietCa` ADD FOREIGN KEY (`maCa`) REFERENCES `Ca`(`maCa`) ON DELETE CASCADE;
 ALTER TABLE `ChiTietCa` ADD FOREIGN KEY (`maXe`) REFERENCES `Xe`(`maXe`);
 ALTER TABLE `ChiTietCa` ADD FOREIGN KEY (`maTaiXe`) REFERENCES `TaiXe`(`maTaiXe`);
 ALTER TABLE `TuyenDuong` ADD FOREIGN KEY (`huyenDon`) REFERENCES `Huyen`(`maHuyen`);

@@ -1,15 +1,17 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, ShiftViewSet, BookingViewSet, AuthViewSet, RouteViewSet
+from .auth.views import AuthViewSet
+# from .booking.views import BookingViewSet
+# from .shift.views import ShiftViewSet
+# from .route.views import RouteViewSet
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 router = DefaultRouter()
-router.register(r'user', UserViewSet, basename='user')
-router.register(r'shift', ShiftViewSet, basename='shift')
-router.register(r'booking', BookingViewSet, basename='booking')
 router.register(r'auth', AuthViewSet, basename='auth')
-router.register(r'route', RouteViewSet, basename='route')
+# router.register(r'booking', BookingViewSet, basename='booking')
+# router.register(r'shift', ShiftViewSet, basename='shift')
+# router.register(r'route', RouteViewSet, basename='route')
 
 
 api_urlpatterns = [

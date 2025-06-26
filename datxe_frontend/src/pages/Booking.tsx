@@ -66,11 +66,15 @@ interface PassengerDetail {
   sodienthoaikhach: string;
   soghe: number;
   ghichu?: string;
+  nguoidat?: string; // Thông tin về người đặt cho hành khách này (quan hệ hoặc tên người đặt)
   // Separate pickup/dropoff for each passenger (REQUIRED)
   selectedPickup: AddressResult | null;
   selectedDropoff: AddressResult | null;
   diemdon?: number;  // madiadiem for pickup location (after createLocation)
   diemtra?: number;  // madiadiem for dropoff location (after createLocation)
+  // Price information for this passenger
+  priceInfo?: PriceInfo | null;
+  priceLoading?: boolean;
 }
 
 interface PriceInfo {
@@ -153,7 +157,107 @@ const Booking: React.FC = () => {
       Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+  };  // Calculate total amount for all passengers
+  const calculateTotalAmount = useCallback(() => {
+    let totalAmount = 0;
+    
+    // Add price for main booker (based on main pickup/dropoff)
+    const mainPrice = priceInfo?.giatien || priceInfo?.giacuoc || 0;
+    totalAmount += mainPrice * mainBookerSeats;
+    
+    console.log('🧮 Calculating total amount:');
+    console.log('💰 Main price:', mainPrice, 'x', mainBookerSeats, '=', mainPrice * mainBookerSeats);
+    
+    // Add price for each additional passenger (they have their own price)
+    passengers.forEach((passenger, index) => {
+      const passengerPrice = passenger.priceInfo?.giatien || passenger.priceInfo?.giacuoc || mainPrice;
+      const passengerAmount = passengerPrice * passenger.soghe;
+      totalAmount += passengerAmount;
+      
+      console.log(`👤 Passenger ${index + 1}:`, {
+        name: passenger.tenkhach,
+        seats: passenger.soghe,
+        ownPrice: passenger.priceInfo?.giatien || passenger.priceInfo?.giacuoc,
+        usedPrice: passengerPrice,
+        amount: passengerAmount,
+        hasPickup: !!passenger.selectedPickup,
+        hasDropoff: !!passenger.selectedDropoff
+      });
+    });
+    
+    console.log('💳 Total amount:', totalAmount);
+    return totalAmount;
+  }, [priceInfo, mainBookerSeats, passengers]);  // Calculate price for a specific passenger
+  const calculatePassengerPrice = async (passengerIndex: number) => {
+    console.log(`🔄 Starting price calculation for passenger ${passengerIndex}`);
+    
+    setPassengers(currentPassengers => {
+      const passenger = currentPassengers[passengerIndex];
+      if (!passenger?.selectedPickup || !passenger?.selectedDropoff) {
+        console.log(`❌ Cannot calculate price for passenger ${passengerIndex}: missing pickup/dropoff`);
+        return currentPassengers;
+      }
+
+      console.log(`🔄 Calculating price for passenger ${passengerIndex}:`, {
+        name: passenger.tenkhach,
+        pickup: passenger.selectedPickup.display_name,
+        dropoff: passenger.selectedDropoff.display_name
+      });
+
+      // Update passenger price loading state
+      const updatedPassengers = [...currentPassengers];
+      updatedPassengers[passengerIndex] = { ...passenger, priceLoading: true };
+      
+      // Start async price calculation
+      (async () => {
+        try {
+          const response = await api.calculatePrice({
+            lat_don: passenger.selectedPickup!.lat,
+            lon_don: passenger.selectedPickup!.lon,
+            lat_tra: passenger.selectedDropoff!.lat,
+            lon_tra: passenger.selectedDropoff!.lon,
+          });
+
+          console.log(`✅ Price calculated for passenger ${passengerIndex}:`, response);
+
+          // Update passenger with price info
+          setPassengers(latestPassengers => {
+            const finalPassengers = [...latestPassengers];
+            finalPassengers[passengerIndex] = { 
+              ...finalPassengers[passengerIndex], 
+              priceInfo: response, 
+              priceLoading: false 
+            };
+            console.log(`📝 Updated passenger ${passengerIndex} with price:`, finalPassengers[passengerIndex]);
+            return finalPassengers;
+          });
+          
+        } catch (error) {
+          console.error('Error calculating passenger price:', error);
+          // Update with error state
+          setPassengers(latestPassengers => {
+            const finalPassengers = [...latestPassengers];
+            finalPassengers[passengerIndex] = { 
+              ...finalPassengers[passengerIndex], 
+              priceInfo: null, 
+              priceLoading: false 
+            };
+            return finalPassengers;
+          });
+        }
+      })();
+
+      return updatedPassengers;
+    });
   };
+
+  // State for total amount
+  const [totalAmount, setTotalAmount] = useState(0);
+
+  // Recalculate total amount when relevant data changes
+  useEffect(() => {
+    const amount = calculateTotalAmount();
+    setTotalAmount(amount);  }, [calculateTotalAmount]);
 
   // Get selected shift info
   const selectedShiftInfo = shifts.find(shift => shift.maca === selectedShift);
@@ -456,145 +560,41 @@ const Booking: React.FC = () => {
     }
   };  // Passenger management functions
   const addPassenger = () => {
-    if (totalSeats >= 7) {
-      message.warning('Số ghế tối đa là 7. Không thể thêm hành khách.');
-      return;
-    }
-    
-    setPassengers([...passengers, { 
-      tenkhach: '', 
-      sodienthoaikhach: '', 
+    const newPassenger: PassengerDetail = {
+      tenkhach: '',
+      sodienthoaikhach: '',
       soghe: 1,
-      selectedPickup: null, // Each passenger must choose their own pickup
-      selectedDropoff: null // Each passenger must choose their own dropoff
-    }]);
+      selectedPickup: null,
+      selectedDropoff: null,
+      priceInfo: null,
+      priceLoading: false
+    };
+    setPassengers([...passengers, newPassenger]);
   };
+
+  const updatePassenger = (index: number, field: keyof PassengerDetail, value: any) => {
+    const updatedPassengers = [...passengers];
+    updatedPassengers[index] = { ...updatedPassengers[index], [field]: value };
+    
+    // If pickup or dropoff changed, calculate new price
+    if ((field === 'selectedPickup' || field === 'selectedDropoff') && 
+        updatedPassengers[index].selectedPickup && 
+        updatedPassengers[index].selectedDropoff) {
+      updatedPassengers[index].priceInfo = null; // Reset price while calculating
+      setPassengers(updatedPassengers);
+      calculatePassengerPrice(index);
+    } else {
+      setPassengers(updatedPassengers);
+    }
+  };
+
   const removePassenger = (index: number) => {
-    const newPassengers = passengers.filter((_, i) => i !== index);
-    setPassengers(newPassengers);
-    updateTotalSeats(newPassengers);
-    
-    // Clean up options and loading states for this passenger
-    setPassengerPickupOptions(prev => {
-      const newOptions = { ...prev };
-      delete newOptions[index];
-      // Re-index remaining options
-      const reindexedOptions: typeof newOptions = {};
-      Object.keys(newOptions).forEach(key => {
-        const keyIndex = parseInt(key);
-        if (keyIndex > index) {
-          reindexedOptions[keyIndex - 1] = newOptions[keyIndex];
-        } else {
-          reindexedOptions[keyIndex] = newOptions[keyIndex];
-        }
-      });
-      return reindexedOptions;
-    });
-    
-    setPassengerDropoffOptions(prev => {
-      const newOptions = { ...prev };
-      delete newOptions[index];
-      // Re-index remaining options
-      const reindexedOptions: typeof newOptions = {};
-      Object.keys(newOptions).forEach(key => {
-        const keyIndex = parseInt(key);
-        if (keyIndex > index) {
-          reindexedOptions[keyIndex - 1] = newOptions[keyIndex];
-        } else {
-          reindexedOptions[keyIndex] = newOptions[keyIndex];
-        }
-      });
-      return reindexedOptions;
-    });
-    
-    setPassengerPickupLoading(prev => {
-      const newLoading = { ...prev };
-      delete newLoading[index];
-      // Re-index remaining loading states
-      const reindexedLoading: typeof newLoading = {};
-      Object.keys(newLoading).forEach(key => {
-        const keyIndex = parseInt(key);
-        if (keyIndex > index) {
-          reindexedLoading[keyIndex - 1] = newLoading[keyIndex];
-        } else {
-          reindexedLoading[keyIndex] = newLoading[keyIndex];
-        }
-      });
-      return reindexedLoading;
-    });
-    
-    setPassengerDropoffLoading(prev => {
-      const newLoading = { ...prev };
-      delete newLoading[index];
-      // Re-index remaining loading states
-      const reindexedLoading: typeof newLoading = {};
-      Object.keys(newLoading).forEach(key => {
-        const keyIndex = parseInt(key);
-        if (keyIndex > index) {
-          reindexedLoading[keyIndex - 1] = newLoading[keyIndex];
-        } else {
-          reindexedLoading[keyIndex] = newLoading[keyIndex];
-        }
-      });
-      return reindexedLoading;
-    });
-    
-    // Clear timeouts for this passenger
-    setPassengerSearchTimeouts(prev => {
-      const newTimeouts = { ...prev };
-      const pickupKey = `${index}-pickup`;
-      const dropoffKey = `${index}-dropoff`;
-      
-      if (newTimeouts[pickupKey]) {
-        clearTimeout(newTimeouts[pickupKey]);
-        delete newTimeouts[pickupKey];
-      }
-      if (newTimeouts[dropoffKey]) {
-        clearTimeout(newTimeouts[dropoffKey]);
-        delete newTimeouts[dropoffKey];
-      }
-      
-      return newTimeouts;
-    });
-  };const updatePassenger = (index: number, field: keyof PassengerDetail, value: any) => {
-    console.log('🔄 UpdatePassenger:', { index, field, value });
-    const newPassengers = [...passengers];
-    
-    // Check total seats limit when updating seat count
-    if (field === 'soghe') {
-      const newTotal = newPassengers.reduce((sum, passenger, i) => {
-        if (i === index) {
-          return sum + (value || 0); // Use new value for current passenger
-        }
-        return sum + (passenger.soghe || 0);
-      }, 1); // +1 for main booker
-      
-      console.log('📊 Total seats calculation:', { newTotal, maxAllowed: 7 });
-      
-      if (newTotal > 7) {
-        message.warning('Tổng số ghế không được vượt quá 7.');
-        return;
-      }
-    }
-    
-    newPassengers[index] = { ...newPassengers[index], [field]: value };
-    console.log('✅ Updated passengers:', newPassengers);
-    setPassengers(newPassengers);
-    
-    if (field === 'soghe') {
-      updateTotalSeats(newPassengers);
-    }
-  };  const updateTotalSeats = (passengerList: PassengerDetail[], customMainSeats?: number) => {
-    const passengerSeatsTotal = passengerList.reduce((sum, passenger) => sum + (passenger.soghe || 0), 0);
-    const currentMainSeats = customMainSeats !== undefined ? customMainSeats : mainBookerSeats;
-    const total = currentMainSeats + passengerSeatsTotal;
-    console.log('🧮 Calculating total seats:', {
-      mainSeats: currentMainSeats,
-      passengerSeats: passengerSeatsTotal,
-      total: total
-    });
-    setTotalSeats(total);
-  };// Handle form submission
+    const updatedPassengers = passengers.filter((_, i) => i !== index);
+    setPassengers(updatedPassengers);
+  };
+
+  // ...existing code...
+  // Handle form submission
   const handleSubmit = async (values: any) => {
     console.log('🚀 handleSubmit called with values:', values);
     console.log('📝 Current state:', {
@@ -694,9 +694,7 @@ const Booking: React.FC = () => {
         if (!passengerDropoffId) {
           message.error(`Không thể tạo điểm trả cho hành khách thứ ${i + 1}`);
           return;
-        }
-
-        processedPassengers.push({
+        }        processedPassengers.push({
           tenkhach: passenger.tenkhach,
           sodienthoaikhach: passenger.sodienthoaikhach,
           diemdon: passengerPickupId,
@@ -738,7 +736,7 @@ const Booking: React.FC = () => {
             <p><strong>Điểm trả:</strong> {bookingResponse.diemtra.tendiadiem}</p>
             <p><strong>Thời gian xuất phát:</strong> {bookingResponse.maca.gioxuatphat} - {dayjs(bookingResponse.maca.ngayxuatphat).format('DD/MM/YYYY')}</p>
             <p><strong>Số ghế:</strong> {bookingResponse.soghe}</p>
-            {(priceInfo?.giatien || priceInfo?.giacuoc) && <p><strong>Giá vé ước tính:</strong> {((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ</p>}
+            {(priceInfo?.giatien || priceInfo?.giacuoc) && <p><strong>Giá vé ước tính:</strong> {totalAmount.toLocaleString()} VNĐ</p>}
           </div>
         ),
         width: 500
@@ -930,19 +928,24 @@ const Booking: React.FC = () => {
             <>
               <Divider />
               <div style={{ marginBottom: '16px' }}>
-                <Text strong>Địa chỉ đã chọn:</Text>
-                {selectedPickup && (
+                <Text strong>Địa chỉ đã chọn:</Text>                {selectedPickup && (
                   <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#f6ffed', borderLeft: '3px solid #52c41a', borderRadius: '4px' }}>
                     <Text style={{ color: '#52c41a' }}>🚗 Điểm đón: </Text>
                     <Text>{selectedPickup.display_name}</Text>
+                    <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '4px' }}>
+                      📍 Tọa độ: {parseFloat(selectedPickup.lat).toFixed(6)}, {parseFloat(selectedPickup.lon).toFixed(6)}
+                    </div>
                   </div>
                 )}
                 {selectedDropoff && (
                   <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#fff2f0', borderLeft: '3px solid #ff4d4f', borderRadius: '4px' }}>
                     <Text style={{ color: '#ff4d4f' }}>🏁 Điểm trả: </Text>
                     <Text>{selectedDropoff.display_name}</Text>
+                    <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '4px' }}>
+                      📍 Tọa độ: {parseFloat(selectedDropoff.lat).toFixed(6)}, {parseFloat(selectedDropoff.lon).toFixed(6)}
+                    </div>
                   </div>
-                )}                {estimatedDistance && (
+                )}{estimatedDistance && (
                   <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#f0f5ff', borderLeft: '3px solid #1890ff', borderRadius: '4px' }}>
                     <Text style={{ color: '#1890ff' }}>📏 Khoảng cách ước tính: </Text>
                     <Text strong>{estimatedDistance} km</Text>
@@ -953,25 +956,23 @@ const Booking: React.FC = () => {
                     {priceLoading ? (
                       <Spin size="small" style={{ marginRight: '8px' }} />
                     ) : (priceInfo.giatien || priceInfo.giacuoc) ? (
-                      <>
-                        <Text style={{ color: '#faad14' }}>💰 Giá vé: </Text>
-                        <Text strong>{(priceInfo.giatien || priceInfo.giacuoc || 0).toLocaleString()} VNĐ/khách</Text>
+                      <>                        <Text style={{ color: '#faad14' }}>💰 Giá vé: </Text>
+                        <Text strong>{(priceInfo.giatien || priceInfo.giacuoc || 0).toLocaleString()} VNĐ/ghế</Text>
                         {priceInfo.tuyenduong && (
                           <div style={{ marginTop: '4px', fontSize: '12px' }}>
                             <Text type="secondary">
                               🛣️ {priceInfo.huyen_don?.tenhuyen} → {priceInfo.huyen_tra?.tenhuyen}
                             </Text>
                           </div>
-                        )}
-                        {totalSeats > 1 && (
-                          <>
-                            <br />
-                            <Text style={{ color: '#faad14' }}>💰 Tổng tiền ({totalSeats} ghế): </Text>
-                            <Text strong style={{ fontSize: '16px', color: '#fa8c16' }}>
-                              {((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ
-                            </Text>
-                          </>
-                        )}
+                        )}                            {totalSeats > 1 && (
+                              <>
+                                <br />
+                                <Text style={{ color: '#faad14' }}>💰 Tổng tiền ({totalSeats} ghế): </Text>
+                                <Text strong style={{ fontSize: '16px', color: '#fa8c16' }}>
+                                  {totalAmount.toLocaleString()} VNĐ
+                                </Text>
+                              </>
+                            )}
                       </>                    ) : (
                       <Text style={{ color: '#ff4d4f' }}>⚠️ {priceInfo.message || 'Không thể tính giá cho tuyến đường này'}</Text>
                     )}
@@ -1052,9 +1053,8 @@ const Booking: React.FC = () => {
                         <span>Tổng tiền</span>
                       </Space>
                     }
-                  >
-                    <Input
-                      value={`${((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ`}
+                  >                    <Input
+                      value={`${totalAmount.toLocaleString()} VNĐ`}
                       disabled
                       style={{ fontWeight: 'bold', color: '#fa8c16' }}
                     />
@@ -1096,22 +1096,22 @@ const Booking: React.FC = () => {
                         />
                       }
                     >                      <Row gutter={8}>
-                        <Col xs={24} sm={6}>
+                        <Col xs={24} sm={5}>
                           <Input
                             placeholder="Họ tên"
                             value={passenger.tenkhach}
                             onChange={(e) => updatePassenger(index, 'tenkhach', e.target.value)}
                             prefix={<UserOutlined />}
                           />
-                        </Col>
-                        <Col xs={24} sm={6}>
+                        </Col>                        <Col xs={24} sm={5}>
                           <Input
                             placeholder="Số điện thoại"
                             value={passenger.sodienthoaikhach}
                             onChange={(e) => updatePassenger(index, 'sodienthoaikhach', e.target.value)}
                             prefix={<PhoneOutlined />}
                           />
-                        </Col>                        <Col xs={24} sm={3}>
+                        </Col>
+                        <Col xs={24} sm={3}>
                           <InputNumber
                             min={1}
                             max={Math.min(5, 7 - totalSeats + (passenger.soghe || 1))} // Dynamic max based on remaining seats
@@ -1127,7 +1127,7 @@ const Booking: React.FC = () => {
                             step={1}
                           />
                         </Col>
-                        <Col xs={24} sm={9}>
+                        <Col xs={24} sm={7}>
                           <Input
                             placeholder="Ghi chú"
                             value={passenger.ghichu}
@@ -1162,10 +1162,12 @@ const Booking: React.FC = () => {
                             style={{ width: '100%' }}
                           >
                             <Input />
-                          </AutoComplete>
-                          {passenger.selectedPickup && (
+                          </AutoComplete>                          {passenger.selectedPickup && (
                             <div style={{ fontSize: '11px', color: '#52c41a', marginTop: '2px' }}>
                               ✓ {passenger.selectedPickup.display_name}
+                              <div style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>
+                                📍 {parseFloat(passenger.selectedPickup.lat).toFixed(6)}, {parseFloat(passenger.selectedPickup.lon).toFixed(6)}
+                              </div>
                             </div>
                           )}
                         </Col>                        <Col xs={24} sm={12}>
@@ -1193,10 +1195,12 @@ const Booking: React.FC = () => {
                             style={{ width: '100%' }}
                           >
                             <Input />
-                          </AutoComplete>
-                          {passenger.selectedDropoff && (
+                          </AutoComplete>                          {passenger.selectedDropoff && (
                             <div style={{ fontSize: '11px', color: '#ff4d4f', marginTop: '2px' }}>
                               ✓ {passenger.selectedDropoff.display_name}
+                              <div style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>
+                                📍 {parseFloat(passenger.selectedDropoff.lat).toFixed(6)}, {parseFloat(passenger.selectedDropoff.lon).toFixed(6)}
+                              </div>
                             </div>
                           )}
                         </Col>
@@ -1216,12 +1220,17 @@ const Booking: React.FC = () => {
                 <Col xs={24} md={12}>
                   <div style={{ marginBottom: '8px' }}>
                     <Text strong>🚌 Ca xe:</Text> {selectedShiftInfo?.gioxuatphat} - {dayjs(selectedShiftInfo?.ngayxuatphat).format('DD/MM/YYYY')}
-                  </div>
-                  <div style={{ marginBottom: '8px' }}>
+                  </div>                  <div style={{ marginBottom: '8px' }}>
                     <Text strong>🟢 Điểm đón chính:</Text> {selectedPickup.display_name}
+                    <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '2px' }}>
+                      📍 {parseFloat(selectedPickup.lat).toFixed(6)}, {parseFloat(selectedPickup.lon).toFixed(6)}
+                    </div>
                   </div>
                   <div style={{ marginBottom: '8px' }}>
                     <Text strong>🔴 Điểm trả chính:</Text> {selectedDropoff.display_name}
+                    <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '2px' }}>
+                      📍 {parseFloat(selectedDropoff.lat).toFixed(6)}, {parseFloat(selectedDropoff.lon).toFixed(6)}
+                    </div>
                   </div>
                 </Col>
                 <Col xs={24} md={12}>
@@ -1230,29 +1239,72 @@ const Booking: React.FC = () => {
                   </div>
                   <div style={{ marginBottom: '8px' }}>
                     <Text strong>💰 Giá mỗi ghế:</Text> {(priceInfo.giatien || priceInfo.giacuoc || 0).toLocaleString()} VNĐ
-                  </div>
-                  <div style={{ marginBottom: '8px' }}>
+                  </div>                  <div style={{ marginBottom: '8px' }}>
                     <Text strong style={{ color: '#d4380d' }}>💳 Tổng tiền:</Text> 
-                    <Text strong style={{ color: '#d4380d', fontSize: '16px' }}> {((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ</Text>
+                    <Text strong style={{ color: '#d4380d', fontSize: '16px' }}> {totalAmount.toLocaleString()} VNĐ</Text>
                   </div>
                 </Col>
-              </Row>
-              {passengers.length > 0 && (
+              </Row>              {passengers.length > 0 && (
                 <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #d9f7be' }}>
                   <Text strong>Hành khách bổ sung ({passengers.length}):</Text>
                   {passengers.map((passenger, index) => (
-                    <div key={index} style={{ marginTop: '4px', fontSize: '12px' }}>
-                      <Text>• {passenger.tenkhach || `Hành khách ${index + 2}`} ({passenger.soghe} ghế)</Text>
-                      {passenger.selectedPickup && passenger.selectedDropoff && (
-                        <Text style={{ color: '#8c8c8c' }}>
-                          {' - '}
-                          🟢 {passenger.selectedPickup.display_name} 
-                          {' → '}
-                          🔴 {passenger.selectedDropoff.display_name}
+                    <div key={index} style={{ 
+                      marginTop: '8px', 
+                      padding: '8px', 
+                      backgroundColor: '#fafafa', 
+                      borderRadius: '4px',
+                      border: '1px solid #f0f0f0'
+                    }}>                      <div style={{ marginBottom: '4px' }}>
+                        <Text strong>
+                          • {passenger.tenkhach || `Hành khách ${index + 2}`}
+                          <span style={{ color: '#1890ff', marginLeft: '8px' }}>({passenger.soghe} ghế)</span>
                         </Text>
+                      </div>
+                        {passenger.selectedPickup && passenger.selectedDropoff && (
+                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
+                          🟢 {passenger.selectedPickup.display_name}
+                          <div style={{ fontSize: '10px', marginLeft: '12px', color: '#999' }}>
+                            📍 {parseFloat(passenger.selectedPickup.lat).toFixed(6)}, {parseFloat(passenger.selectedPickup.lon).toFixed(6)}
+                          </div>
+                          🔴 {passenger.selectedDropoff.display_name}
+                          <div style={{ fontSize: '10px', marginLeft: '12px', color: '#999' }}>
+                            📍 {parseFloat(passenger.selectedDropoff.lat).toFixed(6)}, {parseFloat(passenger.selectedDropoff.lon).toFixed(6)}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Price info for this passenger */}
+                      {passenger.selectedPickup && passenger.selectedDropoff && (
+                        <div style={{ fontSize: '12px' }}>
+                          {passenger.priceLoading ? (
+                            <div style={{ color: '#1890ff' }}>
+                              <Spin size="small" style={{ marginRight: '4px' }} />
+                              Đang tính giá...
+                            </div>
+                          ) : passenger.priceInfo ? (
+                            <div style={{ color: '#52c41a' }}>
+                              � Giá vé: <Text strong>{(passenger.priceInfo.giatien || passenger.priceInfo.giacuoc || 0).toLocaleString()} VNĐ/ghế</Text>
+                              {passenger.soghe > 1 && (
+                                <span> = <Text strong style={{ color: '#fa8c16' }}>{((passenger.priceInfo.giatien || passenger.priceInfo.giacuoc || 0) * passenger.soghe).toLocaleString()} VNĐ</Text></span>
+                              )}
+                            </div>
+                          ) : (
+                            <div style={{ color: '#faad14' }}>
+                              💰 Áp dụng giá chính: <Text strong>{(priceInfo?.giatien || priceInfo?.giacuoc || 0).toLocaleString()} VNĐ/ghế</Text>
+                              {passenger.soghe > 1 && (
+                                <span> = <Text strong style={{ color: '#fa8c16' }}>{((priceInfo?.giatien || priceInfo?.giacuoc || 0) * passenger.soghe).toLocaleString()} VNĐ</Text></span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}
+                  <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>
+                    <Text>💡 <em>Giá vé có thể khác nhau tùy theo địa chỉ đón/trả của từng hành khách</em></Text>
+                    <br />
+                    <Text>💰 <em>Tổng tiền được tính theo từng tuyến đường riêng biệt</em></Text>
+                  </div>
                 </div>
               )}
             </Card>
@@ -1275,10 +1327,9 @@ const Booking: React.FC = () => {
                   isDisabled: !selectedShift || !selectedPickup || !selectedDropoff || !(priceInfo?.giatien || priceInfo?.giacuoc)
                 });
               }}
-            >
-              <CarOutlined />
+            >              <CarOutlined />
               {(priceInfo?.giatien || priceInfo?.giacuoc)
-                ? `Đặt Xe - ${((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ`
+                ? `Đặt Xe - ${totalAmount.toLocaleString()} VNĐ`
                 : 'Đặt Xe Ngay'
               }
             </Button>

@@ -5,7 +5,7 @@
   padding: 0 16px;
 }
 
-/* Card hover effect */
+/* Card hover effects */
 .feature-card {
   transition: all 0.3s ease;
 }
@@ -13,6 +13,31 @@
 .feature-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.route-card {
+  transition: all 0.3s ease;
+  border: 1px solid #f0f0f0;
+}
+
+.route-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+  border-color: #1890ff;
+}
+
+/* Stats card styling */
+.stats-card {
+  transition: all 0.3s ease;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #f0f0f0;
+}
+
+.stats-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: #1890ff;
 }
 
 /* Media queries for responsive design */

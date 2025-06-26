@@ -86,6 +86,9 @@ interface PassengerDetail {
   selectedDropoff: AddressResult | null;
   diemdon?: number;
   diemtra?: number;
+  // Price information for this passenger
+  priceInfo?: PriceInfo | null;
+  priceLoading?: boolean;
 }
 
 interface PriceInfo {
@@ -194,17 +197,17 @@ const StaffBooking: React.FC = () => {
         console.log('✅ Found customer:', user);
         setSelectedCustomer(user);
         setShowCreateCustomer(false);
-        message.success(`Tìm thấy khách hàng: ${user.hoten}`);
+        message.success(`Tìm thấy hành khách: ${user.hoten}`);
         setCurrentStep(1); // Move to booking step
       } else {
         console.log('❌ Customer not found, show create form');
         setSelectedCustomer(null);
         setShowCreateCustomer(true);
-        message.info('Không tìm thấy khách hàng. Vui lòng tạo tài khoản mới.');
+        message.info('Không tìm thấy hành khách. Vui lòng tạo tài khoản mới.');
       }
     } catch (error: any) {
       console.error('❌ Error searching customer:', error);
-      message.error('Lỗi khi tìm kiếm khách hàng');
+      message.error('Lỗi khi tìm kiếm hành khách');
       setSelectedCustomer(null);
       setShowCreateCustomer(true);
     } finally {
@@ -238,7 +241,7 @@ const StaffBooking: React.FC = () => {
       
     } catch (error: any) {
       console.error('❌ Error creating customer:', error);
-      message.error('Lỗi khi tạo tài khoản khách hàng');
+      message.error('Lỗi khi tạo tài khoản hành khách');
     } finally {
       setCreateCustomerLoading(false);
     }
@@ -256,7 +259,7 @@ const StaffBooking: React.FC = () => {
   // Steps configuration
   const steps = [
     {
-      title: 'Tìm khách hàng',
+      title: 'Tìm hành khách',
       content: 'customer-search'
     },
     {
@@ -306,7 +309,109 @@ const StaffBooking: React.FC = () => {
       Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+  };  // Calculate total amount for all passengers
+  const calculateTotalAmount = useCallback(() => {
+    let totalAmount = 0;
+    
+    // Add price for main booker (based on main pickup/dropoff)
+    const mainPrice = priceInfo?.giatien || priceInfo?.giacuoc || 0;
+    totalAmount += mainPrice * mainBookerSeats;
+    
+    console.log('🧮 [Staff] Calculating total amount:');
+    console.log('💰 Main price:', mainPrice, 'x', mainBookerSeats, '=', mainPrice * mainBookerSeats);
+    
+    // Add price for each additional passenger (they have their own price)
+    passengers.forEach((passenger, index) => {
+      const passengerPrice = passenger.priceInfo?.giatien || passenger.priceInfo?.giacuoc || mainPrice;
+      const passengerAmount = passengerPrice * passenger.soghe;
+      totalAmount += passengerAmount;
+      
+      console.log(`👤 [Staff] Passenger ${index + 1}:`, {
+        name: passenger.tenkhach,
+        seats: passenger.soghe,
+        ownPrice: passenger.priceInfo?.giatien || passenger.priceInfo?.giacuoc,
+        usedPrice: passengerPrice,
+        amount: passengerAmount,
+        hasPickup: !!passenger.selectedPickup,
+        hasDropoff: !!passenger.selectedDropoff
+      });
+    });
+    
+    console.log('💳 [Staff] Total amount:', totalAmount);
+    return totalAmount;
+  }, [priceInfo, mainBookerSeats, passengers]);
+  // Calculate price for a specific passenger
+  const calculatePassengerPrice = async (passengerIndex: number) => {
+    console.log(`🔄 [Staff] Starting price calculation for passenger ${passengerIndex}`);
+    
+    setPassengers(currentPassengers => {
+      const passenger = currentPassengers[passengerIndex];
+      if (!passenger?.selectedPickup || !passenger?.selectedDropoff) {
+        console.log(`❌ [Staff] Cannot calculate price for passenger ${passengerIndex}: missing pickup/dropoff`);
+        return currentPassengers;
+      }
+
+      console.log(`🔄 [Staff] Calculating price for passenger ${passengerIndex}:`, {
+        name: passenger.tenkhach,
+        pickup: passenger.selectedPickup.display_name,
+        dropoff: passenger.selectedDropoff.display_name
+      });
+
+      // Update passenger price loading state
+      const updatedPassengers = [...currentPassengers];
+      updatedPassengers[passengerIndex] = { ...passenger, priceLoading: true };
+      
+      // Start async price calculation
+      (async () => {
+        try {
+          const response = await api.calculatePrice({
+            lat_don: passenger.selectedPickup!.lat,
+            lon_don: passenger.selectedPickup!.lon,
+            lat_tra: passenger.selectedDropoff!.lat,
+            lon_tra: passenger.selectedDropoff!.lon,
+          });
+
+          console.log(`✅ [Staff] Price calculated for passenger ${passengerIndex}:`, response);
+
+          // Update passenger with price info
+          setPassengers(latestPassengers => {
+            const finalPassengers = [...latestPassengers];
+            finalPassengers[passengerIndex] = { 
+              ...finalPassengers[passengerIndex], 
+              priceInfo: response, 
+              priceLoading: false 
+            };
+            console.log(`📝 [Staff] Updated passenger ${passengerIndex} with price:`, finalPassengers[passengerIndex]);
+            return finalPassengers;
+          });
+          
+        } catch (error) {
+          console.error('[Staff] Error calculating passenger price:', error);
+          // Update with error state
+          setPassengers(latestPassengers => {
+            const finalPassengers = [...latestPassengers];
+            finalPassengers[passengerIndex] = { 
+              ...finalPassengers[passengerIndex], 
+              priceInfo: null, 
+              priceLoading: false 
+            };
+            return finalPassengers;
+          });
+        }
+      })();
+
+      return updatedPassengers;
+    });
   };
+
+  // State for total amount
+  const [totalAmount, setTotalAmount] = useState(0);
+
+  // Recalculate total amount when relevant data changes
+  useEffect(() => {
+    const amount = calculateTotalAmount();
+    setTotalAmount(amount);
+  }, [calculateTotalAmount]);
 
   // Get selected shift info
   const selectedShiftInfo = shifts.find(shift => shift.maca === selectedShift);
@@ -639,32 +744,18 @@ const StaffBooking: React.FC = () => {
   };
 
   const updatePassenger = (index: number, field: keyof PassengerDetail, value: any) => {
-    console.log('🔄 UpdatePassenger:', { index, field, value });
-    const newPassengers = [...passengers];
+    const updatedPassengers = [...passengers];
+    updatedPassengers[index] = { ...updatedPassengers[index], [field]: value };
     
-    // Check total seats limit when updating seat count
-    if (field === 'soghe') {
-      const newTotal = newPassengers.reduce((sum, passenger, i) => {
-        if (i === index) {
-          return sum + (value || 0); // Use new value for current passenger
-        }
-        return sum + (passenger.soghe || 0);
-      }, 1); // +1 for main booker
-      
-      console.log('📊 Total seats calculation:', { newTotal, maxAllowed: 7 });
-      
-      if (newTotal > 7) {
-        message.warning('Tổng số ghế không được vượt quá 7.');
-        return;
-      }
-    }
-    
-    newPassengers[index] = { ...newPassengers[index], [field]: value };
-    console.log('✅ Updated passengers:', newPassengers);
-    setPassengers(newPassengers);
-    
-    if (field === 'soghe') {
-      updateTotalSeats(newPassengers);
+    // If pickup or dropoff changed, calculate new price
+    if ((field === 'selectedPickup' || field === 'selectedDropoff') && 
+        updatedPassengers[index].selectedPickup && 
+        updatedPassengers[index].selectedDropoff) {
+      updatedPassengers[index].priceInfo = null; // Reset price while calculating
+      setPassengers(updatedPassengers);
+      calculatePassengerPrice(index);
+    } else {
+      setPassengers(updatedPassengers);
     }
   };
 
@@ -683,7 +774,7 @@ const StaffBooking: React.FC = () => {
     <div style={{ padding: '24px' }}>
       <Card>
         <Title level={2}>
-          <UserOutlined /> Đặt vé cho khách hàng (Nhân viên)
+          <UserOutlined /> Đặt vé cho hành khách (Nhân viên)
         </Title>
         
         <Steps current={currentStep} style={{ marginBottom: '32px' }}>
@@ -694,13 +785,13 @@ const StaffBooking: React.FC = () => {
 
         {/* Step 1: Customer Search/Create */}
         {currentStep === 0 && (
-          <Card title="🔍 Tìm kiếm khách hàng" style={{ marginBottom: '24px' }}>
+          <Card title="🔍 Tìm kiếm hành khách" style={{ marginBottom: '24px' }}>
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
               <Row gutter={16} align="middle">
                 <Col span={16}>
                   <Input
                     size="large"
-                    placeholder="Nhập số điện thoại khách hàng"
+                    placeholder="Nhập số điện thoại hành khách"
                     prefix={<PhoneOutlined />}
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
@@ -723,7 +814,7 @@ const StaffBooking: React.FC = () => {
 
               {selectedCustomer && (
                 <Alert
-                  message="Đã tìm thấy khách hàng"
+                  message="Đã tìm thấy hành khách"
                   description={
                     <div>
                       <p><strong>Tên:</strong> {selectedCustomer.hoten}</p>
@@ -769,7 +860,7 @@ const StaffBooking: React.FC = () => {
                           name="hoten"
                           rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
                         >
-                          <Input prefix={<UserOutlined />} placeholder="Nhập họ tên khách hàng" />
+                          <Input prefix={<UserOutlined />} placeholder="Nhập họ tên hành khách" />
                         </Form.Item>
                       </Col>
                     </Row>
@@ -897,17 +988,16 @@ const StaffBooking: React.FC = () => {
                       ghichu: passenger.ghichu || `Đặt từ ${passenger.selectedPickup!.display_name} đến ${passenger.selectedDropoff!.display_name}`
                     });
                   }
-                  message.loading('Đang đặt xe...', 2);
-                  const bookingData = {
+                  message.loading('Đang đặt xe...', 2);                  const bookingData = {
                     maca: selectedShift,
                     diemdon: pickupLocationId,
                     diemtra: dropoffLocationId,
                     soghe: mainBookerSeats,
                     ghichu: `Đặt từ ${selectedPickup.display_name} đến ${selectedDropoff.display_name}`,
                     chitietdatxe: processedPassengers.length > 0 ? processedPassengers : undefined,
-                    manguoidung: selectedCustomer.manguoidung // Gán mã người dùng khách hàng
+                    ma_khach: selectedCustomer.manguoidung // Mã hành khách để tạo booking
                   };
-                  const bookingResponse = await api.createBooking(bookingData);
+                  const bookingResponse = await api.createStaffBooking(bookingData);
                   message.success({
                     content: `Đặt xe thành công! Mã đặt xe: ${bookingResponse.madatxe}`,
                     duration: 5
@@ -1115,13 +1205,12 @@ const StaffBooking: React.FC = () => {
                                   🛣️ {priceInfo.huyen_don?.tenhuyen} → {priceInfo.huyen_tra?.tenhuyen}
                                 </Text>
                               </div>
-                            )}
-                            {totalSeats > 1 && (
+                            )}                            {totalSeats > 1 && (
                               <>
                                 <br />
                                 <Text style={{ color: '#faad14' }}>💰 Tổng tiền ({totalSeats} ghế): </Text>
                                 <Text strong style={{ fontSize: '16px', color: '#fa8c16' }}>
-                                  {((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ
+                                  {totalAmount.toLocaleString()} VNĐ
                                 </Text>
                               </>
                             )}
@@ -1209,9 +1298,8 @@ const StaffBooking: React.FC = () => {
                             <span>Tổng tiền</span>
                           </Space>
                         }
-                      >
-                        <Input
-                          value={`${((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ`}
+                      >                        <Input
+                          value={`${totalAmount.toLocaleString()} VNĐ`}
                           disabled
                           style={{ fontWeight: 'bold', color: '#fa8c16' }}
                         />
@@ -1396,29 +1484,66 @@ const StaffBooking: React.FC = () => {
                       </div>
                       <div style={{ marginBottom: '8px' }}>
                         <Text strong>💰 Giá mỗi ghế:</Text> {(priceInfo.giatien || priceInfo.giacuoc || 0).toLocaleString()} VNĐ
-                      </div>
-                      <div style={{ marginBottom: '8px' }}>
+                      </div>                      <div style={{ marginBottom: '8px' }}>
                         <Text strong style={{ color: '#d4380d' }}>💳 Tổng tiền:</Text> 
-                        <Text strong style={{ color: '#d4380d', fontSize: '16px' }}> {((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ</Text>
+                        <Text strong style={{ color: '#d4380d', fontSize: '16px' }}> {totalAmount.toLocaleString()} VNĐ</Text>
                       </div>
                     </Col>
-                  </Row>
-                  {passengers.length > 0 && (
+                  </Row>                  {passengers.length > 0 && (
                     <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #d9f7be' }}>
                       <Text strong>Hành khách bổ sung ({passengers.length}):</Text>
                       {passengers.map((passenger, index) => (
-                        <div key={index} style={{ marginTop: '4px', fontSize: '12px' }}>
-                          <Text>• {passenger.tenkhach || `Hành khách ${index + 2}`} ({passenger.soghe} ghế)</Text>
+                        <div key={index} style={{ 
+                          marginTop: '8px', 
+                          padding: '8px', 
+                          backgroundColor: '#fafafa', 
+                          borderRadius: '4px',
+                          border: '1px solid #f0f0f0'
+                        }}>
+                          <div style={{ marginBottom: '4px' }}>
+                            <Text strong>• {passenger.tenkhach || `Hành khách ${index + 2}`} ({passenger.soghe} ghế)</Text>
+                          </div>
+                          
                           {passenger.selectedPickup && passenger.selectedDropoff && (
-                            <Text style={{ color: '#8c8c8c' }}>
-                              {' - '}
-                              🟢 {passenger.selectedPickup.display_name} 
-                              {' → '}
+                            <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '4px' }}>
+                              🟢 {passenger.selectedPickup.display_name}
+                              <br />
                               🔴 {passenger.selectedDropoff.display_name}
-                            </Text>
+                            </div>
+                          )}
+                          
+                          {/* Price info for this passenger */}
+                          {passenger.selectedPickup && passenger.selectedDropoff && (
+                            <div style={{ fontSize: '12px' }}>
+                              {passenger.priceLoading ? (
+                                <div style={{ color: '#1890ff' }}>
+                                  <Spin size="small" style={{ marginRight: '4px' }} />
+                                  Đang tính giá...
+                                </div>
+                              ) : passenger.priceInfo ? (
+                                <div style={{ color: '#52c41a' }}>
+                                  � Giá vé: <Text strong>{(passenger.priceInfo.giatien || passenger.priceInfo.giacuoc || 0).toLocaleString()} VNĐ/ghế</Text>
+                                  {passenger.soghe > 1 && (
+                                    <span> = <Text strong style={{ color: '#fa8c16' }}>{((passenger.priceInfo.giatien || passenger.priceInfo.giacuoc || 0) * passenger.soghe).toLocaleString()} VNĐ</Text></span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div style={{ color: '#faad14' }}>
+                                  💰 Áp dụng giá chính: <Text strong>{(priceInfo?.giatien || priceInfo?.giacuoc || 0).toLocaleString()} VNĐ/ghế</Text>
+                                  {passenger.soghe > 1 && (
+                                    <span> = <Text strong style={{ color: '#fa8c16' }}>{((priceInfo?.giatien || priceInfo?.giacuoc || 0) * passenger.soghe).toLocaleString()} VNĐ</Text></span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       ))}
+                      <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>
+                        <Text>💡 <em>Giá vé có thể khác nhau tùy theo địa chỉ đón/trả của từng hành khách</em></Text>
+                        <br />
+                        <Text>💰 <em>Tổng tiền được tính theo từng tuyến đường riêng biệt</em></Text>
+                      </div>
                     </div>
                   )}
                 </Card>
@@ -1443,10 +1568,9 @@ const StaffBooking: React.FC = () => {
                       isDisabled: !selectedShift || !selectedPickup || !selectedDropoff || !(priceInfo?.giatien || priceInfo?.giacuoc)
                     });
                   }}
-                >
-                  <CarOutlined />
+                >                  <CarOutlined />
                   {(priceInfo?.giatien || priceInfo?.giacuoc)
-                    ? `Đặt Xe - ${((priceInfo.giatien || priceInfo.giacuoc || 0) * totalSeats).toLocaleString()} VNĐ`
+                    ? `Đặt Xe - ${totalAmount.toLocaleString()} VNĐ`
                     : 'Đặt Xe Ngay'
                   }
                 </Button>
@@ -1461,7 +1585,7 @@ const StaffBooking: React.FC = () => {
               {/* Bạn chỉ cần copy phần UI từ Booking.tsx vào đây, giữ nguyên các handler đã khai báo ở trên */}
             </Form>
             <Button onClick={() => setCurrentStep(0)} style={{ marginTop: 16 }}>
-              Quay lại chọn khách hàng
+              Quay lại chọn hành khách
             </Button>
           </Card>
         )}
@@ -1471,7 +1595,7 @@ const StaffBooking: React.FC = () => {
           <Card title="✅ Đặt vé thành công">
             <Alert
               message="Đã hoàn thành đặt vé"
-              description="Vé xe đã được đặt thành công cho khách hàng. Bạn có thể tiếp tục đặt vé cho khách hàng khác."
+              description="Vé xe đã được đặt thành công cho hành khách. Bạn có thể tiếp tục đặt vé cho hành khách khác."
               type="success"
               showIcon
               style={{ marginBottom: '16px' }}
@@ -1481,7 +1605,7 @@ const StaffBooking: React.FC = () => {
                 setCurrentStep(0);
                 resetCustomerSelection();
               }}>
-                Đặt vé cho khách hàng khác
+                Đặt vé cho hành khách khác
               </Button>
               <Button onClick={() => setCurrentStep(1)}>
                 Đặt vé tiếp cho khách này

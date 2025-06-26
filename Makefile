@@ -13,8 +13,11 @@ help:
 	@echo "  make up                # Khởi động docker-compose"
 	@echo "  make down              # Tắt docker-compose"
 
-run-ui:
+run-ui-install:
 	cd datxe_frontend && npm install && npm run dev
+
+run-ui:
+	cd datxe_frontend && npm run dev
 
 run-ser:
 	PYTHONPATH=. python3 datxe_backend/manage.py runserver

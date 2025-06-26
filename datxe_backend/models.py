@@ -138,6 +138,7 @@ class Ca(models.Model):
     gioxuatphat = models.TimeField(db_column='gioXuatPhat')
     ngayxuatphat = models.DateField(db_column='ngayXuatPhat')
     mahuyenxuatphat = models.ForeignKey('Huyen', models.DO_NOTHING, db_column='maHuyenXuatPhat')
+    daxoa = models.BooleanField(db_column='daXoa', default=False)
 
     class Meta:
         managed = False
@@ -166,6 +167,8 @@ class Datxe(models.Model):
     trangthai = models.CharField(db_column='trangThai', max_length=50)
     ghichu = models.TextField(db_column='ghiChu', blank=True, null=True)
     soghe = models.IntegerField(db_column='soGhe', default=1) # thêm số ghế
+    thutudon = models.IntegerField(db_column='thuTuDon', blank=True, null=True)  # thứ tự đón khách (optional)
+    thututra = models.IntegerField(db_column='thuTuTra', blank=True, null=True)  # thứ tự trả khách (optional)
 
     class Meta:
         managed = False
@@ -183,6 +186,8 @@ class Chitietdatxe(models.Model):
     trangthai = models.CharField(db_column='trangThai', max_length=50)
     ghichu = models.TextField(db_column='ghiChu', blank=True, null=True)
     soghe = models.IntegerField(db_column='soGhe', default=1) # thêm số ghế
+    thutudon = models.IntegerField(db_column='thuTuDon', blank=True, null=True)  # thứ tự đón khách (optional)
+    thututra = models.IntegerField(db_column='thuTuTra', blank=True, null=True)  # thứ tự trả khách (optional)
 
     class Meta:
         managed = False

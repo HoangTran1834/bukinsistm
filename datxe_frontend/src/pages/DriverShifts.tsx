@@ -110,8 +110,9 @@ interface Booking {
     kinhdo: number;  };
   soghe: number;
   ghichu?: string;
-  trangthai?: string;
-  chitietdatxe?: {
+  trangthai?: string;  chitietdatxe?: {
+    machitiet?: number; // ID của chi tiết đặt xe (Chitietdatxe)
+    chitiet_id?: number;
     tenkhach: string;
     sodienthoaikhach: string;
     diemdon?: {
@@ -128,6 +129,32 @@ interface Booking {
     };
     soghe: number;
     ghichu?: string;
+    trangthai?: string;
+    machitietca?: number | {
+      machitietca: number;
+      maca: {
+        maca: number;
+        mahuyenxuatphat: {
+          mahuyen: number;
+          tenhuyen: string;
+        };
+        gioxuatphat: string;
+        ngayxuatphat: string;
+      };
+      mataixe: {
+        mataixe: number;
+        hoten: string;
+        sodienthoai: string;
+        cccd?: string;
+        trangthai: number;
+      };
+      maxe: {
+        maxe: number;
+        biensoxe: string;
+        loaixe: string;
+        sochongoi: number;
+      };
+    } | null;
   }[];
 }
 
@@ -141,11 +168,12 @@ interface Shift {
   };
 }
 
-const DriverShifts: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs | null>(null);
+const DriverShifts: React.FC = () => {  const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs | null>(null);
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [shiftDetails, setShiftDetails] = useState<ChiTietCa[]>([]);  const [bookings, setBookings] = useState<Record<number, Booking[]>>({});
-  const [loading, setLoading] = useState(false);
+  const [shiftDetails, setShiftDetails] = useState<ChiTietCa[]>([]);
+  const [bookings, setBookings] = useState<Record<number, Booking[]>>({});  const [loading, setLoading] = useState(false);
+  // State for passenger prices and loading status
+  const [passengerPrices, setPassengerPrices] = useState<{[key: string]: {totalPrice: number; distance: number; loading: boolean; error?: string}}>({});
   const [bookingLoading, setBookingLoading] = useState<Record<number, boolean>>({});
   const [loadedBookings, setLoadedBookings] = useState<Set<number>>(new Set());
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -165,19 +193,15 @@ const DriverShifts: React.FC = () => {
     
     loadCurrentUser();
   }, []);
-
   // Load shifts for selected date
   const loadShifts = async (date: dayjs.Dayjs) => {
     try {
-      setLoading(true);
-      const dateString = date.format('YYYY-MM-DD');
-      console.log('🗓️ Loading shifts for date:', dateString);      const requestData = { "ngay": dateString };
-      console.log('📤 Request data sent:', JSON.stringify(requestData));
+      setLoading(true);      const dateString = date.format('YYYY-MM-DD');
+      const requestData = { "ngay": dateString };
       
+      console.log(`📅 [LOAD SHIFTS] Loading shifts for date: ${dateString}`);
       const response = await api.getShiftsByCa(requestData);
-      
-      console.log('📤 Request data sent:', { ngay: dateString });
-      console.log('📋 Shifts response:', response);
+      console.log(`📨 [LOAD SHIFTS] Raw shifts response:`, response);
       
       let shiftsData = [];
       if (Array.isArray(response)) {
@@ -185,19 +209,22 @@ const DriverShifts: React.FC = () => {
       } else if (response && Array.isArray(response.data)) {
         shiftsData = response.data;
       } else if (response && Array.isArray(response.results)) {
-        shiftsData = response.results;
-      } else if (response && response.ca) {
+        shiftsData = response.results;      } else if (response && response.ca) {
         shiftsData = Array.isArray(response.ca) ? response.ca : [response.ca];
       }
       
-      console.log('✅ Processed shifts:', shiftsData);
+      console.log(`📋 [LOAD SHIFTS] Extracted shifts:`, {
+        shiftsCount: shiftsData.length,
+        shifts: shiftsData.map((s: any) => ({ maca: s.maca, gioxuatphat: s.gioxuatphat }))
+      });
+      
       setShifts(shiftsData);
         // Load shift details for each shift
       const allShiftDetails: ChiTietCa[] = [];
       for (const shift of shiftsData) {
-        try {
+        try {          console.log(`🔍 [SHIFT DETAILS] Loading details for shift ${shift.maca}...`);
           const details = await api.getShiftDetails(shift.maca);
-          console.log(`📊 Shift ${shift.maca} details:`, details);
+          console.log(`📨 [SHIFT DETAILS] Raw details for shift ${shift.maca}:`, details);
           
           let detailsArray = [];
           if (Array.isArray(details)) {
@@ -205,22 +232,36 @@ const DriverShifts: React.FC = () => {
           } else if (details && Array.isArray(details.data)) {
             detailsArray = details.data;
           }
+          
+          console.log(`📋 [SHIFT DETAILS] Extracted details for shift ${shift.maca}:`, {
+            detailsCount: detailsArray.length,
+            details: detailsArray.map((d: any) => ({ 
+              machitietca: d.machitietca, 
+              mataixe: d.taixe_info?.mataixe 
+            }))
+          });
             // Filter only shift details for current driver
-          if (currentUser && currentUser.manguoidung) {
+          if (currentUser && currentUser.manguoidung) {            console.log(`👤 [FILTER DRIVER] Filtering for current user: ${currentUser.manguoidung}`);
             const driverShiftDetails = detailsArray.filter((detail: ChiTietCa) => {
-              console.log('🔍 Checking detail:', detail.taixe_info?.mataixe, 'vs current user:', currentUser.manguoidung);
-              return detail.taixe_info?.mataixe === currentUser.manguoidung;
+              const match = detail.taixe_info?.mataixe === currentUser.manguoidung;
+              console.log(`🔍 [FILTER DRIVER] Detail ${detail.machitietca} - mataixe: ${detail.taixe_info?.mataixe}, matches: ${match}`);
+              return match;
+            });
+              console.log(`✅ [FILTER DRIVER] Driver shift details for shift ${shift.maca}:`, {
+              filteredCount: driverShiftDetails.length,
+              filteredDetails: driverShiftDetails.map((d: ChiTietCa) => d.machitietca)
             });
             
-            console.log(`✅ Driver shift details for user ${currentUser.manguoidung}:`, driverShiftDetails);
             allShiftDetails.push(...driverShiftDetails);
           }
         } catch (error) {
-          console.error(`❌ Error loading details for shift ${shift.maca}:`, error);
-        }
+          console.error(`❌ Error loading details for shift ${shift.maca}:`, error);        }
       }
+        console.log(`✅ [LOAD SHIFTS] Final all shift details:`, {
+        totalShiftDetails: allShiftDetails.length,
+        shiftDetailIds: allShiftDetails.map((d: ChiTietCa) => d.machitietca)
+      });
       
-      console.log('🎯 Final filtered shift details:', allShiftDetails);
       setShiftDetails(allShiftDetails);
       
     } catch (error: any) {
@@ -231,38 +272,42 @@ const DriverShifts: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };  // Load bookings for a specific shift detail
+  };// Load bookings for a specific shift detail
   const loadBookings = async (chitietca: ChiTietCa) => {
+    console.log(`🔍 [LOAD BOOKINGS] Starting to load bookings for shift detail:`, {
+      machitietca: chitietca.machitietca,
+      maca: chitietca.maca,
+      isLoading: bookingLoading[chitietca.machitietca],
+      alreadyLoaded: loadedBookings.has(chitietca.machitietca)
+    });
+
     // Check if already loading or loaded
     if (bookingLoading[chitietca.machitietca] || loadedBookings.has(chitietca.machitietca)) {
+      console.log(`⏭️ [LOAD BOOKINGS] Skipping - already loading or loaded`);
       return;
     }
     
-    try {
-      setBookingLoading(prev => ({ ...prev, [chitietca.machitietca]: true }));
+    try {      setBookingLoading(prev => ({ ...prev, [chitietca.machitietca]: true }));
       setLoadedBookings(prev => new Set(prev).add(chitietca.machitietca));
-      console.log('🎫 Loading bookings for shift detail:', chitietca.machitietca);console.log('🔍 Shift detail info:', {
-        machitietca: chitietca.machitietca,
-        maca: chitietca.maca,
-        taixe: chitietca.taixe_info,
-        selectedDate: selectedDate?.format('YYYY-MM-DD')
-      });
       
+      console.log(`📞 [LOAD BOOKINGS] Calling api.getBookings()...`);
       const response = await api.getBookings();
-      console.log('📋 All bookings response:', response);
+      console.log(`📨 [LOAD BOOKINGS] Raw API response:`, response);
       
       // Filter bookings by maca and machitietca
       let allBookings = [];
       if (Array.isArray(response)) {
         allBookings = response;
       } else if (response && Array.isArray(response.data)) {
-        allBookings = response.data;
-      } else if (response && Array.isArray(response.results)) {
+        allBookings = response.data;      } else if (response && Array.isArray(response.results)) {
         allBookings = response.results;
       }
       
-      console.log('📦 All bookings extracted:', allBookings);
-      console.log('🔎 Filtering by maca:', chitietca.maca, 'and machitietca:', chitietca.machitietca);      const filteredBookings = allBookings.filter((booking: Booking) => {
+      console.log(`📋 [LOAD BOOKINGS] All bookings extracted:`, {
+        totalBookings: allBookings.length,
+        bookingIds: allBookings.map((b: any) => b.madatxe),
+        firstBooking: allBookings[0] || null
+      });      const filteredBookings = allBookings.filter((booking: Booking) => {
         // Handle case where maca and machitietca might be objects, numbers, or null
         let bookingMaca = null;
         let bookingMachitietca = null;
@@ -276,26 +321,60 @@ const DriverShifts: React.FC = () => {
         if (booking.machitietca) {
           bookingMachitietca = typeof booking.machitietca === 'object' ? booking.machitietca.machitietca : booking.machitietca;
         }
+
+        // Check if main booking matches
+        const mainBookingMatchesCa = bookingMaca === chitietca.maca;
+        const mainBookingMatchesChitietCa = bookingMachitietca === chitietca.machitietca;
+        const mainBookingMatches = mainBookingMatchesCa && mainBookingMatchesChitietCa;
         
-        const matchesCa = bookingMaca === chitietca.maca;
-        const matchesChitietCa = bookingMachitietca === chitietca.machitietca;
+        // Check if any detail in chitietdatxe matches
+        let hasMatchingDetail = false;
+        if (booking.chitietdatxe && Array.isArray(booking.chitietdatxe)) {
+          hasMatchingDetail = booking.chitietdatxe.some((detail: any) => {
+            let detailMaca = null;
+            let detailMachitietca = null;
+            
+            // Extract maca from detail
+            if (detail.machitietca) {
+              if (typeof detail.machitietca === 'object' && detail.machitietca.maca) {
+                detailMaca = typeof detail.machitietca.maca === 'object' ? detail.machitietca.maca.maca : detail.machitietca.maca;
+                detailMachitietca = detail.machitietca.machitietca;
+              }
+            }
+            
+            const detailMatchesCa = detailMaca === chitietca.maca;
+            const detailMatchesChitietCa = detailMachitietca === chitietca.machitietca;
+            
+            return detailMatchesCa && detailMatchesChitietCa;
+          });
+        }
         
-        console.log('🔍 Booking check:', {
-          madatxe: booking.madatxe,
-          booking_maca_raw: booking.maca,
-          booking_machitietca_raw: booking.machitietca,
-          booking_maca_extracted: bookingMaca,
-          booking_machitietca_extracted: bookingMachitietca,
-          target_maca: chitietca.maca,
-          target_machitietca: chitietca.machitietca,
-          matches_ca: matchesCa,
-          matches_chitietca: matchesChitietCa,
-          overall_match: matchesCa && matchesChitietCa
-        });
-        return matchesCa && matchesChitietCa;
+        const isMatch = mainBookingMatches || hasMatchingDetail;
+        
+        // Enhanced logging for debugging
+        if (booking.madatxe) { // Log all bookings briefly
+          console.log(`🔍 [FILTER] Booking ${booking.madatxe}:`, {
+            bookingMaca,
+            bookingMachitietca,
+            targetMaca: chitietca.maca,
+            targetMachitietca: chitietca.machitietca,
+            mainBookingMatches,
+            hasMatchingDetail,
+            isMatch,
+            rawMaca: booking.maca,
+            rawMachitietca: booking.machitietca,
+            chitietdatxeCount: booking.chitietdatxe?.length || 0
+          });
+        }
+          
+        return isMatch;
       });
       
-      console.log(`✅ Filtered bookings for shift detail ${chitietca.machitietca}:`, filteredBookings);
+      console.log(`✅ [LOAD BOOKINGS] Filtered bookings for shift detail ${chitietca.machitietca}:`, {
+        totalFiltered: filteredBookings.length,
+        filteredBookingIds: filteredBookings.map((b: any) => b.madatxe),
+        filteredBookings: filteredBookings
+      });
       
       setBookings(prev => ({
         ...prev,
@@ -303,19 +382,42 @@ const DriverShifts: React.FC = () => {
       }));
       
     } catch (error: any) {
-      console.error('❌ Error loading bookings:', error);
-      message.error('Không thể tải danh sách hành khách');
-    } finally {
+      console.error('❌ [LOAD BOOKINGS] Error loading bookings:', error);
+      message.error('Không thể tải danh sách hành khách');    } finally {
       setBookingLoading(prev => ({ ...prev, [chitietca.machitietca]: false }));
     }
-  };  // Update booking status
-  const updateBookingStatus = async (madatxe: number, trangthai: string, chitietcaId: number) => {
+  };
+
+  // Update booking status (for main booker or booking detail)
+  const updatePassengerStatus = async (
+    bookingId: number, 
+    chitietId: number | undefined, 
+    trangthai: string, 
+    chitietcaId: number
+  ) => {
     try {
-      console.log(`🔄 Updating booking ${madatxe} status to: ${trangthai}`);
+      console.log(`� START - Updating passenger status:`, {
+        bookingId,
+        chitietId,
+        trangthai,
+        type: chitietId ? 'Additional Passenger (Detail API)' : 'Main Booker (Booking API)'
+      });
       
-      await api.updateBookingStatus(madatxe, { trangthai });
+      if (chitietId) {
+        // Cập nhật trạng thái chi tiết đặt xe (hành khách bổ sung) với machitiet
+        console.log(`� Calling updateBookingDetailStatus API with machitiet=${chitietId}, trangthai="${trangthai}"`);
+        const response = await api.updateBookingDetailStatus(chitietId, { trangthai });
+        console.log(`✅ API Response:`, response);
+        message.success(`Đã cập nhật trạng thái hành khách bổ sung thành: ${trangthai}`);
+      } else {
+        // Cập nhật trạng thái booking chính (người đặt chính)
+        console.log(`� Calling updateBookingStatus API with bookingId=${bookingId}, trangthai="${trangthai}"`);
+        const response = await api.updateBookingStatus(bookingId, { trangthai });
+        console.log(`✅ API Response:`, response);
+        message.success(`Đã cập nhật trạng thái người đặt chính thành: ${trangthai}`);
+      }
       
-      message.success(`Đã cập nhật trạng thái thành: ${trangthai}`);
+      console.log(`🔄 Reloading bookings for shift detail ${chitietcaId}...`);
       
       // Reload bookings for this shift detail to reflect changes
       const shiftDetail = shiftDetails.find(detail => detail.machitietca === chitietcaId);
@@ -333,11 +435,18 @@ const DriverShifts: React.FC = () => {
         }));
         // Reload
         await loadBookings(shiftDetail);
+        console.log(`✅ Successfully reloaded bookings for shift detail ${chitietcaId}`);
       }
       
     } catch (error: any) {
-      console.error('❌ Error updating booking status:', error);
-      message.error('Không thể cập nhật trạng thái đặt vé');
+      console.error('❌ Error updating passenger status:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      message.error('Không thể cập nhật trạng thái hành khách');
     }
   };
 
@@ -536,15 +645,24 @@ const DriverShifts: React.FC = () => {
                       </Tag>
                     </Col>
                   </Row>
-                  
-                  <Row gutter={[16, 8]} style={{ marginTop: '8px' }}>
+                    <Row gutter={[16, 8]} style={{ marginTop: '8px' }}>
                     <Col xs={24} md={12}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <EnvironmentOutlined style={{ color: '#52c41a' }} />
                         <Text type="secondary">
                           <strong>Đón:</strong> {booking?.diemdon?.tendiadiem || 'Chưa có thông tin'}
                         </Text>
-                      </div>
+                      </div>                      {booking?.diemdon?.vido != null && booking?.diemdon?.kinhdo != null && (
+                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginLeft: '20px', marginTop: '2px' }}>
+                          📍 {Number(booking.diemdon.vido).toFixed(6)}, {Number(booking.diemdon.kinhdo).toFixed(6)}
+                        </div>
+                      )}
+                      {/* Debug: Show coordinates availability */}
+                      {(booking?.diemdon?.vido == null || booking?.diemdon?.kinhdo == null) && (
+                        <div style={{ fontSize: '10px', color: '#ff4d4f', marginLeft: '20px', marginTop: '2px' }}>
+                          ⚠️ Tọa độ: vido={booking?.diemdon?.vido || 'null'}, kinhdo={booking?.diemdon?.kinhdo || 'null'}
+                        </div>
+                      )}
                     </Col>
                     <Col xs={24} md={12}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -552,7 +670,17 @@ const DriverShifts: React.FC = () => {
                         <Text type="secondary">
                           <strong>Trả:</strong> {booking?.diemtra?.tendiadiem || 'Chưa có thông tin'}
                         </Text>
-                      </div>
+                      </div>                      {booking?.diemtra?.vido != null && booking?.diemtra?.kinhdo != null && (
+                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginLeft: '20px', marginTop: '2px' }}>
+                          📍 {Number(booking.diemtra.vido).toFixed(6)}, {Number(booking.diemtra.kinhdo).toFixed(6)}
+                        </div>
+                      )}
+                      {/* Debug: Show coordinates availability */}
+                      {(booking?.diemtra?.vido == null || booking?.diemtra?.kinhdo == null) && (
+                        <div style={{ fontSize: '10px', color: '#ff4d4f', marginLeft: '20px', marginTop: '2px' }}>
+                          ⚠️ Tọa độ: vido={booking?.diemtra?.vido || 'null'}, kinhdo={booking?.diemtra?.kinhdo || 'null'}
+                        </div>
+                      )}
                     </Col>
                   </Row>
                     {booking?.ghichu && (
@@ -587,7 +715,7 @@ const DriverShifts: React.FC = () => {
                             size="small"
                             type="primary"
                             disabled={booking?.trangthai === 'Đã đón' || booking?.trangthai === 'Đã trả'}
-                            onClick={() => updateBookingStatus(booking.madatxe, 'Đã đón', chitietca.machitietca)}
+                            onClick={() => updatePassengerStatus(booking.madatxe, undefined, 'Đã đón', chitietca.machitietca)}
                           >
                             Đã đón
                           </Button>
@@ -596,7 +724,7 @@ const DriverShifts: React.FC = () => {
                             type="primary"
                             style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
                             disabled={booking?.trangthai !== 'Đã đón'}
-                            onClick={() => updateBookingStatus(booking.madatxe, 'Đã trả', chitietca.machitietca)}
+                            onClick={() => updatePassengerStatus(booking.madatxe, undefined, 'Đã trả', chitietca.machitietca)}
                           >
                             Đã trả
                           </Button>
@@ -645,8 +773,7 @@ const DriverShifts: React.FC = () => {
                               </Tag>
                             </Col>
                           </Row>
-                          
-                          {(detail?.diemdon || detail?.diemtra) && (
+                            {(detail?.diemdon || detail?.diemtra) && (
                             <Row gutter={[16, 8]} style={{ marginTop: '8px' }}>
                               <Col xs={24} md={12}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -654,7 +781,17 @@ const DriverShifts: React.FC = () => {
                                   <Text type="secondary">
                                     <strong>Đón:</strong> {detail?.diemdon?.tendiadiem || 'Như người đặt'}
                                   </Text>
-                                </div>
+                                </div>                                {detail?.diemdon?.vido != null && detail?.diemdon?.kinhdo != null && (
+                                  <div style={{ fontSize: '11px', color: '#8c8c8c', marginLeft: '20px', marginTop: '2px' }}>
+                                    📍 {Number(detail.diemdon.vido).toFixed(6)}, {Number(detail.diemdon.kinhdo).toFixed(6)}
+                                  </div>
+                                )}
+                                {/* Debug: Show coordinates availability */}
+                                {(detail?.diemdon?.vido == null || detail?.diemdon?.kinhdo == null) && (
+                                  <div style={{ fontSize: '10px', color: '#ff4d4f', marginLeft: '20px', marginTop: '2px' }}>
+                                    ⚠️ Tọa độ đón: vido={detail?.diemdon?.vido || 'null'}, kinhdo={detail?.diemdon?.kinhdo || 'null'}
+                                  </div>
+                                )}
                               </Col>
                               <Col xs={24} md={12}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -662,7 +799,17 @@ const DriverShifts: React.FC = () => {
                                   <Text type="secondary">
                                     <strong>Trả:</strong> {detail?.diemtra?.tendiadiem || 'Như người đặt'}
                                   </Text>
-                                </div>
+                                </div>                                {detail?.diemtra?.vido != null && detail?.diemtra?.kinhdo != null && (
+                                  <div style={{ fontSize: '11px', color: '#8c8c8c', marginLeft: '20px', marginTop: '2px' }}>
+                                    📍 {Number(detail.diemtra.vido).toFixed(6)}, {Number(detail.diemtra.kinhdo).toFixed(6)}
+                                  </div>
+                                )}
+                                {/* Debug: Show coordinates availability */}
+                                {(detail?.diemtra?.vido == null || detail?.diemtra?.kinhdo == null) && (
+                                  <div style={{ fontSize: '10px', color: '#ff4d4f', marginLeft: '20px', marginTop: '2px' }}>
+                                    ⚠️ Tọa độ trả: vido={detail?.diemtra?.vido || 'null'}, kinhdo={detail?.diemtra?.kinhdo || 'null'}
+                                  </div>
+                                )}
                               </Col>
                             </Row>
                           )}
@@ -685,13 +832,20 @@ const DriverShifts: React.FC = () => {
         </div>
       </div>
     );
-  };
-
-  // Render passenger details for a shift - new simplified version
-  const renderPassengerDetailsNew = (chitietca: ChiTietCa) => {
-    const shiftBookings = bookings[chitietca.machitietca] || [];
+  };  // Render passenger details for a shift - new simplified version
+  const renderPassengerDetailsNew = (chitietca: ChiTietCa) => {    const shiftBookings = bookings[chitietca.machitietca] || [];
+    
+    console.log(`🎨 [RENDER] Rendering passenger details for shift detail ${chitietca.machitietca}:`, {
+      shiftBookingsCount: shiftBookings.length,
+      allBookingsState: Object.keys(bookings).map(key => ({ 
+        key, 
+        count: bookings[parseInt(key)]?.length || 0 
+      })),
+      shiftBookings: shiftBookings
+    });
     
     if (shiftBookings.length === 0) {
+      console.log(`⚠️ [RENDER] No bookings found for shift detail ${chitietca.machitietca}`);
       return (
         <div style={{ textAlign: 'center', padding: '24px' }}>
           <Text type="secondary" style={{ fontSize: '16px' }}>
@@ -699,56 +853,116 @@ const DriverShifts: React.FC = () => {
           </Text>
         </div>
       );
-    }
-
-    // Collect all passengers from all bookings
+    }// Collect all passengers from all bookings
     const allPassengers: Array<{
       bookingId: number;
+      chitietId?: number; // ID của chi tiết đặt vé (machitiet cho khách phụ)
       name: string;
       phone: string;
       seats: number;
       pickup: string;
       dropoff: string;
+      pickupCoords?: { vido: number; kinhdo: number };
+      dropoffCoords?: { vido: number; kinhdo: number };
       note?: string;
       trangthai?: string;
       isMainBooker: boolean;
-    }> = [];
+      totalPrice?: number; // Tổng tiền phải trả
+      distance?: number; // Khoảng cách (km)
+    }> = [];    shiftBookings.forEach(booking => {
+      // Add main booker only if booking's main machitietca matches
+      let bookingMachitietca = null;
+      if (booking.machitietca) {
+        bookingMachitietca = typeof booking.machitietca === 'object' ? booking.machitietca.machitietca : booking.machitietca;
+      }
+      
+      const mainBookingMatches = bookingMachitietca === chitietca.machitietca;
+      
+      if (mainBookingMatches) {
+        const mainBooker = {
+          bookingId: booking.madatxe,
+          name: booking?.manguoidung?.hoten || 'N/A',
+          phone: booking?.manguoidung?.sodienthoai || 'N/A',
+          seats: booking.soghe,
+          pickup: booking?.diemdon?.tendiadiem || 'Chưa có thông tin',
+          dropoff: booking?.diemtra?.tendiadiem || 'Chưa có thông tin',
+          note: booking?.ghichu,
+          trangthai: booking?.trangthai,
+          isMainBooker: true,
+          pickupCoords: booking?.diemdon?.vido != null && booking?.diemdon?.kinhdo != null ? {
+            vido: booking.diemdon.vido,
+            kinhdo: booking.diemdon.kinhdo
+          } : undefined,
+          dropoffCoords: booking?.diemtra?.vido != null && booking?.diemtra?.kinhdo != null ? {
+            vido: booking.diemtra.vido,
+            kinhdo: booking.diemtra.kinhdo
+          } : undefined,
+          totalPrice: 0,
+          distance: 0
+        };
+        allPassengers.push(mainBooker);
+      }
 
-    shiftBookings.forEach(booking => {
-      // Add main booker
-      allPassengers.push({
-        bookingId: booking.madatxe,
-        name: booking?.manguoidung?.hoten || 'N/A',
-        phone: booking?.manguoidung?.sodienthoai || 'N/A',
-        seats: booking.soghe,
-        pickup: booking?.diemdon?.tendiadiem || 'Chưa có thông tin',
-        dropoff: booking?.diemtra?.tendiadiem || 'Chưa có thông tin',
-        note: booking?.ghichu,
-        trangthai: booking?.trangthai,
-        isMainBooker: true
-      });
-
-      // Add additional passengers
+      // Add additional passengers from chitietdatxe that match this shift detail
       if (booking.chitietdatxe) {
-        booking.chitietdatxe.forEach(detail => {
-          allPassengers.push({
-            bookingId: booking.madatxe,
-            name: detail?.tenkhach || 'N/A',
-            phone: detail?.sodienthoaikhach || 'N/A',
-            seats: detail.soghe,
-            pickup: detail?.diemdon?.tendiadiem || booking?.diemdon?.tendiadiem || 'Chưa có thông tin',
-            dropoff: detail?.diemtra?.tendiadiem || booking?.diemtra?.tendiadiem || 'Chưa có thông tin',
-            note: detail?.ghichu,
-            trangthai: booking?.trangthai, // Use booking status for all passengers
-            isMainBooker: false
-          });
+        booking.chitietdatxe.forEach((detail, detailIndex) => {
+          let detailMachitietca = null;
+          
+          // Extract machitietca from detail
+          if (detail.machitietca) {
+            detailMachitietca = typeof detail.machitietca === 'object' ? detail.machitietca.machitietca : detail.machitietca;
+          }
+          
+          // Only add this detail if it matches the current shift detail
+          if (detailMachitietca === chitietca.machitietca) {
+            const additionalPassenger = {
+              bookingId: booking.madatxe,
+              chitietId: detail.machitiet, // Dùng machitiet để cập nhật trạng thái chi tiết
+              name: detail?.tenkhach || 'N/A',
+              phone: detail?.sodienthoaikhach || 'N/A',
+              seats: detail.soghe,
+              pickup: detail?.diemdon?.tendiadiem || booking?.diemdon?.tendiadiem || 'Chưa có thông tin',
+              dropoff: detail?.diemtra?.tendiadiem || booking?.diemtra?.tendiadiem || 'Chưa có thông tin',
+              note: detail?.ghichu,
+              trangthai: detail?.trangthai || booking?.trangthai, // Ưu tiên trạng thái riêng của chi tiết
+              isMainBooker: false,
+              pickupCoords: detail?.diemdon?.vido != null && detail?.diemdon?.kinhdo != null ? {
+                vido: detail.diemdon.vido,
+                kinhdo: detail.diemdon.kinhdo
+              } : (booking?.diemdon?.vido != null && booking?.diemdon?.kinhdo != null ? {
+                vido: booking.diemdon.vido,
+                kinhdo: booking.diemdon.kinhdo
+              } : undefined),
+              dropoffCoords: detail?.diemtra?.vido != null && detail?.diemtra?.kinhdo != null ? {
+                vido: detail.diemtra.vido,
+                kinhdo: detail.diemtra.kinhdo
+              } : (booking?.diemtra?.vido != null && booking?.diemtra?.kinhdo != null ? {
+                vido: booking.diemtra.vido,
+                kinhdo: booking.diemtra.kinhdo
+              } : undefined),
+              totalPrice: 0,
+              distance: 0
+            };
+            allPassengers.push(additionalPassenger);
+          }
         });
       }
-    });
-
-    const totalPassengers = allPassengers.length;
+    });console.log('� All passengers ready:', allPassengers.map((p, index) => ({
+      index,
+      name: p.name,
+      isMainBooker: p.isMainBooker,
+      chitietId: p.chitietId,
+      canUpdate: p.isMainBooker ? 'booking API' : (p.chitietId ? 'detail API' : 'NO API - missing ID')
+    })));    const totalPassengers = allPassengers.length;
     const totalSeats = allPassengers.reduce((sum, passenger) => sum + passenger.seats, 0);
     const totalBookings = shiftBookings.length;
+    
+    // Calculate total revenue from actual price data
+    const totalRevenue = allPassengers.reduce((sum, passenger) => {
+      const passengerKey = `${passenger.bookingId}-${passenger.isMainBooker ? 'main' : passenger.chitietId || 'additional'}`;
+      const priceData = passengerPrices[passengerKey];
+      return sum + (priceData?.totalPrice || 0);
+    }, 0);
 
     return (
       <div style={{ backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '8px' }}>
@@ -756,8 +970,7 @@ const DriverShifts: React.FC = () => {
         <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e8e8e8' }}>
           <Title level={5} style={{ margin: 0, marginBottom: '8px', color: '#1890ff' }}>
             📊 Tổng quan hành khách
-          </Title>
-          <Space size="large">
+          </Title>          <Space size="large">
             <Tag color="green" style={{ fontSize: '14px', padding: '4px 12px' }}>
               {totalBookings} đặt vé
             </Tag>
@@ -767,10 +980,16 @@ const DriverShifts: React.FC = () => {
             <Tag color="orange" style={{ fontSize: '14px', padding: '4px 12px' }}>
               {totalSeats} ghế
             </Tag>
-          </Space>
-        </div>
-
-        {/* Passengers List */}
+            <Tag color="red" style={{ fontSize: '14px', padding: '4px 12px' }}>
+              💰 {totalRevenue.toLocaleString('vi-VN')} VNĐ
+            </Tag>
+          </Space><div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#f6ffed', borderRadius: '4px', fontSize: '13px' }}>
+            <Text type="secondary">
+              💡 <strong>Lưu ý:</strong> Mỗi hành khách có thể được cập nhật trạng thái riêng biệt. 
+              Người đặt chính và hành khách bổ sung có thể có trạng thái khác nhau (Đã đặt, Đã đón, Đã trả).
+            </Text>
+          </div>
+        </div>        {/* Passengers List */}
         <div style={{ display: 'grid', gap: '8px' }}>
           {allPassengers.map((passenger, index) => (
             <Card 
@@ -780,15 +999,84 @@ const DriverShifts: React.FC = () => {
                 marginBottom: '0',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                 border: '1px solid #e8e8e8'
-              }}
-              title={
+              }}              title={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#1890ff', fontWeight: 'bold' }}>
-                    👤 {passenger.name} (Đặt vé #{passenger.bookingId})
+                    {passenger.isMainBooker ? '👤 ' : '👥 '}{passenger.name} 
+                    {passenger.isMainBooker ? ' (Người đặt chính)' : ' (Hành khách bổ sung)'}
+                    <Text type="secondary" style={{ fontSize: '12px', marginLeft: '8px' }}>
+                      Đặt vé #{passenger.bookingId}
+                    </Text>
+                  </span>                  <span>
+                    <Tag color="purple" style={{ fontSize: '12px' }}>
+                      {passenger.seats} ghế
+                    </Tag>
+                    {(() => {
+                      const passengerKey = `${passenger.bookingId}-${passenger.isMainBooker ? 'main' : passenger.chitietId || 'additional'}`;
+                      const priceData = passengerPrices[passengerKey];
+                      
+                      if (priceData?.loading) {
+                        return (
+                          <Tag color="red" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                            💰 Đang tính...
+                          </Tag>
+                        );
+                      } else if (priceData?.error) {
+                        return (
+                          <Tag color="red" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                            💰 Lỗi
+                          </Tag>
+                        );
+                      } else if (priceData?.totalPrice) {
+                        return (
+                          <Tag color="red" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                            💰 {priceData.totalPrice.toLocaleString('vi-VN')} VNĐ
+                          </Tag>
+                        );
+                      } else {
+                        // Calculate price on first render
+                        if (passenger.pickupCoords && passenger.dropoffCoords) {
+                          setTimeout(() => {
+                            calculatePassengerPrice({
+                              pickupCoords: passenger.pickupCoords,
+                              dropoffCoords: passenger.dropoffCoords,
+                              seats: passenger.seats,
+                              passengerKey
+                            });
+                          }, 100 * index); // Stagger API calls
+                        }
+                        return (
+                          <Tag color="red" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                            💰 Chưa tính
+                          </Tag>
+                        );
+                      }
+                    })()}
+                    {(() => {
+                      const passengerKey = `${passenger.bookingId}-${passenger.isMainBooker ? 'main' : passenger.chitietId || 'additional'}`;
+                      const priceData = passengerPrices[passengerKey];
+                      
+                      if (priceData?.loading) {
+                        return (
+                          <Tag color="cyan" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                            📏 Đang tính...
+                          </Tag>
+                        );
+                      } else if (priceData?.distance) {
+                        return (
+                          <Tag color="cyan" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                            📏 {priceData.distance.toFixed(1)} km
+                          </Tag>
+                        );
+                      } else {
+                        return (
+                          <Tag color="cyan" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                            📏 Chưa tính
+                          </Tag>
+                        );
+                      }
+                    })()}
                   </span>
-                  <Tag color="purple" style={{ fontSize: '12px' }}>
-                    {passenger.seats} ghế
-                  </Tag>
                 </div>
               }
             >
@@ -798,14 +1086,21 @@ const DriverShifts: React.FC = () => {
                     <PhoneOutlined style={{ color: '#1890ff' }} />
                     <Text>{passenger.phone}</Text>
                   </div>
-                </Col>
-                <Col xs={24} sm={12} md={8}>
+                </Col>                <Col xs={24} sm={12} md={8}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <EnvironmentOutlined style={{ color: '#52c41a' }} />
                     <Text type="secondary">
                       <strong>Đón:</strong> {passenger.pickup}
                     </Text>
                   </div>
+                  {/* Hiển thị tọa độ điểm đón */}
+                  {passenger.pickupCoords && passenger.pickupCoords.vido != null && passenger.pickupCoords.kinhdo != null && (
+                    <div style={{ marginLeft: '22px', marginTop: '2px' }}>
+                      <Text style={{ fontSize: '11px', color: '#999' }}>
+                        📍 ({Number(passenger.pickupCoords.vido).toFixed(6)}, {Number(passenger.pickupCoords.kinhdo).toFixed(6)})
+                      </Text>
+                    </div>
+                  )}
                 </Col>
                 <Col xs={24} sm={12} md={8}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -814,6 +1109,14 @@ const DriverShifts: React.FC = () => {
                       <strong>Trả:</strong> {passenger.dropoff}
                     </Text>
                   </div>
+                  {/* Hiển thị tọa độ điểm trả */}
+                  {passenger.dropoffCoords && passenger.dropoffCoords.vido != null && passenger.dropoffCoords.kinhdo != null && (
+                    <div style={{ marginLeft: '22px', marginTop: '2px' }}>
+                      <Text style={{ fontSize: '11px', color: '#999' }}>
+                        📍 ({Number(passenger.dropoffCoords.vido).toFixed(6)}, {Number(passenger.dropoffCoords.kinhdo).toFixed(6)})
+                      </Text>
+                    </div>
+                  )}
                 </Col>
               </Row>
 
@@ -823,56 +1126,127 @@ const DriverShifts: React.FC = () => {
                     💬 <strong>Ghi chú:</strong> {passenger.note}
                   </Text>
                 </div>
-              )}
-
-              {/* Status and Action Buttons - only for main booker */}
-              {passenger.isMainBooker && (
-                <div style={{ marginTop: '12px', padding: '8px', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #e8e8e8' }}>
-                  <Row gutter={[8, 8]} align="middle">
-                    <Col>
-                      <Text strong style={{ fontSize: '13px', color: '#666' }}>
-                        Trạng thái:
-                      </Text>
-                    </Col>
-                    <Col>
-                      <Tag color={
-                        passenger.trangthai === 'Đã đón' ? 'orange' :
-                        passenger.trangthai === 'Đã trả' ? 'green' :
-                        passenger.trangthai === 'Đã đặt' ? 'blue' : 'default'
-                      }>
-                        {passenger.trangthai || 'Chưa xác định'}
-                      </Tag>
-                    </Col>
-                    <Col flex="auto" />
-                    <Col>
-                      <Space size="small">
-                        <Button
-                          size="small"
-                          type="primary"
-                          disabled={passenger.trangthai === 'Đã đón' || passenger.trangthai === 'Đã trả'}
-                          onClick={() => updateBookingStatus(passenger.bookingId, 'Đã đón', chitietca.machitietca)}
-                        >
-                          Đã đón
-                        </Button>
-                        <Button
-                          size="small"
-                          type="primary"
-                          style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
-                          disabled={passenger.trangthai !== 'Đã đón'}
-                          onClick={() => updateBookingStatus(passenger.bookingId, 'Đã trả', chitietca.machitietca)}
-                        >
-                          Đã trả
-                        </Button>
-                      </Space>
-                    </Col>
-                  </Row>
-                </div>
-              )}
+              )}              {/* Status and Action Buttons - for all passengers */}
+              <div style={{ marginTop: '12px', padding: '8px', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #e8e8e8' }}>
+                <Row gutter={[8, 8]} align="middle">
+                  <Col>
+                    <Text strong style={{ fontSize: '13px', color: '#666' }}>
+                      Trạng thái:
+                    </Text>
+                  </Col>
+                  <Col>
+                    <Tag color={
+                      passenger.trangthai === 'Đã đón' ? 'orange' :
+                      passenger.trangthai === 'Đã trả' ? 'green' :
+                      passenger.trangthai === 'Đã đặt' ? 'blue' : 'default'
+                    }>
+                      {passenger.trangthai || 'Chưa xác định'}
+                    </Tag>
+                  </Col>
+                  <Col flex="auto" />
+                  <Col>
+                    <Space size="small">                      <Button
+                        size="small"
+                        type="primary"
+                        disabled={passenger.trangthai === 'Đã đón' || passenger.trangthai === 'Đã trả'}                        onClick={() => {
+                          console.log(`🔍 BUTTON CLICK - Button clicked for passenger:`, {
+                            name: passenger.name,
+                            isMainBooker: passenger.isMainBooker,
+                            bookingId: passenger.bookingId,
+                            chitietId: passenger.chitietId,
+                            willCallAPI: passenger.isMainBooker ? 'updateBookingStatus' : 'updateBookingDetailStatus',
+                            apiParam: passenger.isMainBooker ? passenger.bookingId : passenger.chitietId
+                          });
+                          updatePassengerStatus(passenger.bookingId, passenger.chitietId, 'Đã đón', chitietca.machitietca);
+                        }}
+                      >
+                        Đã đón
+                      </Button>
+                      <Button
+                        size="small"
+                        type="primary"
+                        style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                        disabled={passenger.trangthai !== 'Đã đón'}                        onClick={() => {
+                          console.log(`🔍 BUTTON CLICK - Button clicked for passenger:`, {
+                            name: passenger.name,
+                            isMainBooker: passenger.isMainBooker,
+                            bookingId: passenger.bookingId,
+                            chitietId: passenger.chitietId,
+                            willCallAPI: passenger.isMainBooker ? 'updateBookingStatus' : 'updateBookingDetailStatus',
+                            apiParam: passenger.isMainBooker ? passenger.bookingId : passenger.chitietId
+                          });
+                          updatePassengerStatus(passenger.bookingId, passenger.chitietId, 'Đã trả', chitietca.machitietca);
+                        }}
+                      >
+                        Đã trả
+                      </Button>
+                    </Space>
+                  </Col>
+                </Row>
+              </div>
             </Card>
           ))}
         </div>
       </div>
     );
+  };
+  // Calculate price for passenger
+  const calculatePassengerPrice = async (passenger: {
+    pickupCoords?: { vido: number; kinhdo: number };
+    dropoffCoords?: { vido: number; kinhdo: number };
+    seats: number;
+    passengerKey: string; // Unique key for caching
+  }) => {
+    try {
+      if (!passenger.pickupCoords || !passenger.dropoffCoords) {
+        return { totalPrice: 0, distance: 0 };
+      }
+
+      // Set loading state
+      setPassengerPrices(prev => ({
+        ...prev,
+        [passenger.passengerKey]: { ...prev[passenger.passengerKey], loading: true, error: undefined }
+      }));
+
+      // Call calculatePrice API similar to Booking/StaffBooking
+      const priceResponse = await api.calculatePrice({
+        lat_don: passenger.pickupCoords.vido.toString(),
+        lon_don: passenger.pickupCoords.kinhdo.toString(),
+        lat_tra: passenger.dropoffCoords.vido.toString(),
+        lon_tra: passenger.dropoffCoords.kinhdo.toString()
+      });
+
+      if (priceResponse.success && (priceResponse.giatien || priceResponse.giacuoc)) {
+        const unitPrice = priceResponse.giatien || priceResponse.giacuoc || 0;
+        const totalPrice = unitPrice * passenger.seats;
+        const distance = priceResponse.khoangcach || 0;
+
+        const result = { totalPrice, distance, loading: false };
+        
+        // Update state
+        setPassengerPrices(prev => ({
+          ...prev,
+          [passenger.passengerKey]: result
+        }));
+
+        return result;
+      } else {
+        const result = { totalPrice: 0, distance: 0, loading: false, error: 'Không thể tính giá' };
+        setPassengerPrices(prev => ({
+          ...prev,
+          [passenger.passengerKey]: result
+        }));
+        return result;
+      }
+    } catch (error) {
+      console.error('Error calculating price for passenger:', error);
+      const result = { totalPrice: 0, distance: 0, loading: false, error: 'Lỗi khi tính giá' };
+      setPassengerPrices(prev => ({
+        ...prev,
+        [passenger.passengerKey]: result
+      }));
+      return result;
+    }
   };
 
   return (

@@ -205,6 +205,12 @@ const api = {
     return response.data;
   },
   
+  // Staff booking - nhân viên tạo booking cho khách hàng
+  createStaffBooking: async (data: BookingRequest & { ma_khach: number; ma_nhanvien?: number }): Promise<BookingResponse> => {
+    const response = await axios.post('/booking/staff/', data);
+    return response.data;
+  },
+  
   getBookings: async () => {
     const response = await axios.get('/booking/');
     return response.data;
@@ -213,9 +219,11 @@ const api = {
     const response = await axios.get(`/booking/${id}/`);
     return response.data;
   },
-
   updateBookingStatus: async (madatxe: number, data: { trangthai: string; ghichu?: string; soghe?: number; manhanvien?: number; matuyenduong?: number }) => {
     const response = await axios.put(`/booking/${madatxe}/`, data);
+    return response.data;
+  },  updateBookingDetailStatus: async (machitiet: number, data: { trangthai: string; ghichu?: string }) => {
+    const response = await axios.put(`/booking/detail/${machitiet}/`, data);
     return response.data;
   },
 
@@ -335,7 +343,19 @@ const api = {
   reverseGeocode: async (lat: string, lon: string) => {
     const response = await axios.post('/route/reverse_geocode/', { lat, lon });
     return response.data;
-  }
+  },
+
+  // Get booking price details with distance and price breakdown
+  getBookingPriceDetails: async (data: {
+    lat_don: string;
+    lon_don: string;
+    lat_tra: string;
+    lon_tra: string;
+    soghe?: number;
+  }) => {
+    const response = await axios.post('/route/get_price/', data);
+    return response.data;
+  },
 };
 
 export default api;
